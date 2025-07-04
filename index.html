@@ -5,53 +5,26 @@
   <title>Multiplayer Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <style>
-    body {
-      margin: 0; padding: 0;
-      background: #000; color: #fff;
-      font-family: sans-serif;
-      touch-action: none;
-    }
-    canvas {
-      display: block;
-      margin: 20px auto 0;
-      background: #222;
-      border: 2px solid #fff;
-    }
-    #ui {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 10px;
-      user-select: none;
-      touch-action: manipulation;
-    }
+    body { margin:0; padding:0; background:#000; color:#fff; font-family:sans-serif; touch-action:none; }
+    canvas { display:block; margin:20px auto 0; background:#222; border:2px solid #fff; }
+    #ui { display:flex; justify-content:center; gap:10px; margin-top:10px; }
     button {
-      padding: 15px 20px;
-      font-size: 18px;
-      background: #444; color: white;
-      border: none; border-radius: 8px;
-      cursor: pointer;
+      padding:15px 20px; font-size:18px; background:#444; color:#fff;
+      border:none; border-radius:8px; cursor:pointer;
     }
     #respawnBtn {
-      display: none;
-      position: absolute; top: 55%; left: 50%;
-      transform: translate(-50%, -50%);
-      background: red; font-size: 24px;
-      padding: 15px 30px; border-radius: 10px;
-      z-index: 10;
+      display:none; position:absolute; top:55%; left:50%;
+      transform:translate(-50%,-50%); background:red; font-size:24px;
+      padding:15px 30px; border-radius:10px; z-index:10;
     }
     #nameInput {
-      position: absolute; top: 40%; left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center; z-index: 10;
+      position:absolute; top:40%; left:50%;
+      transform:translate(-50%,-50%); text-align:center; z-index:10;
     }
     #nameInput input {
-      font-size: 24px; padding: 10px; width: 200px;
-      border-radius: 8px;
+      font-size:24px; padding:10px; width:200px; border-radius:8px;
     }
-    #nameInput button {
-      margin-top: 10px; font-size: 20px;
-    }
+    #nameInput button { margin-top:10px; font-size:20px; }
   </style>
 </head>
 <body>
@@ -76,165 +49,186 @@
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
 const pubnub = new PubNub({
-  publishKey: 'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
+  publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
   subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
-  uuid: 'player-' + Date.now()
+  uuid:         'player-' + Date.now()
 });
 const channel = "game-channel";
 const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const myID = pubnub.getUUID();
-let players = {}, bullets = [], isDead = false, lastShotTime = 0;
+const ctx    = canvas.getContext('2d');
+const myID   = pubnub.getUUID();
+
+let players      = {};
+let bullets      = [];
+let isDead       = false;
+let lastShotTime = 0;
+let processedKill = {}; // per evitare doppie kill
 const respawnBtn = document.getElementById("respawnBtn");
 
-// 1) Inizia gioco
+// 1) Avvio del gioco
 function startGame() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) return alert("Inserisci un nome!");
   players[myID] = {
-    name, x: Math.random()*580, y: Math.random()*380,
+    name,
+    x: Math.random()*580, y: Math.random()*380,
     color: '#'+Math.floor(Math.random()*16777215).toString(16),
     kills:0, lives:3
   };
-  document.getElementById("nameInput").style.display="none";
+  document.getElementById("nameInput").style.display = "none";
   sendState();
   draw();
 }
 
-// 2) Movimento
+// 2) Movimento (limiti 600×400)
 function move(key){
-  if(isDead||!players[myID])return;
-  const dirs = {
-    ArrowLeft:{dx:-5,dy:0},ArrowRight:{dx:5,dy:0},
-    ArrowUp:{dx:0,dy:-5},ArrowDown:{dx:0,dy:5}
-  };
-  const d=dirs[key];
-  if(d){
-    let me=players[myID];
-    me.x=Math.max(0,Math.min(580,me.x+d.dx));
-    me.y=Math.max(0,Math.min(380,me.y+d.dy));
+  if(isDead||!players[myID]) return;
+  const D = {
+    ArrowLeft: {dx:-5,dy:0}, ArrowRight: {dx:5,dy:0},
+    ArrowUp:   {dx:0,dy:-5}, ArrowDown:{dx:0,dy:5}
+  }[key];
+  if (D) {
+    let me = players[myID];
+    me.x = Math.max(0, Math.min(580, me.x + D.dx));
+    me.y = Math.max(0, Math.min(380, me.y + D.dy));
     sendState();
   }
 }
-document.addEventListener('keydown',e=>move(e.key));
-window.move=move;
+document.addEventListener('keydown', e=>move(e.key));
+window.move = move;
 
 // 3) Sparo con cooldown 1s
-canvas.addEventListener('click',e=>{
-  if(isDead||!players[myID])return;
-  const now=Date.now();
-  if(now-lastShotTime<1000)return;
-  lastShotTime=now;
-  const r=canvas.getBoundingClientRect();
-  const tx=e.clientX-r.left, ty=e.clientY-r.top;
-  const me=players[myID];
-  bullets.push({id:myID+"-"+now,x:me.x+10,y:me.y+10,tx,ty,owner:myID,start:now});
+canvas.addEventListener('click', e => {
+  if(isDead||!players[myID]) return;
+  const now = Date.now();
+  if(now - lastShotTime < 1000) return;
+  lastShotTime = now;
+  const r = canvas.getBoundingClientRect();
+  const tx = e.clientX - r.left, ty = e.clientY - r.top;
+  const me = players[myID];
+  bullets.push({ id:myID+"-"+now, x:me.x+10, y:me.y+10, tx, ty, owner:myID, start:now });
   sendBullets();
 });
 
 // 4) Pubblica stato e proiettili
 function sendState(){
-  pubnub.publish({channel,message:{type:'state',uuid:myID,data:players[myID]}});
+  pubnub.publish({ channel, message:{ type:'state', uuid:myID, data:players[myID] } });
 }
 function sendBullets(){
-  pubnub.publish({channel,message:{type:'bullets',bullets}});
+  pubnub.publish({ channel, message:{ type:'bullets', bullets } });
 }
 
 // 5) Ricezione messaggi
-pubnub.addListener({message:({message})=>{
-  if(message.type==='state'){
-    players[message.uuid]={...players[message.uuid],...message.data};
-  }else if(message.type==='bullets'){
-    bullets=message.bullets;
-  }else if(message.type==='hit'){
-    const t=message.target, o=message.owner;
-    if(!players[t])return;
-    players[t].lives--;
-    // se muore
-    if(players[t].lives<=0){
-      if(t===myID) die();
-      // kill per owner
-      pubnub.publish({channel,message:{type:'kill',uuid:o}});
-      delete players[t];
+pubnub.addListener({ message: ({message}) => {
+  if(message.type==='state') {
+    players[message.uuid] = { ...players[message.uuid], ...message.data };
+  } else if(message.type==='bullets') {
+    bullets = message.bullets;
+  } else if(message.type==='hit') {
+    const tgt = message.target, own = message.owner;
+    if(!players[tgt]) return;
+    players[tgt].lives--;
+    // se il target è stato ucciso da questo hit
+    if(players[tgt].lives === 0) {
+      // spawn kill una sola volta per owner→target
+      const key = own + "→" + tgt;
+      if(!processedKill[key]) {
+        pubnub.publish({ channel, message:{ type:'kill', uuid:own } });
+        processedKill[key] = true;
+      }
+      // se sono io a morire
+      if(tgt === myID) die();
     }
+    // aggiorna stato
     sendState();
-  }else if(message.type==='kill'){
-    if(message.uuid===myID) {
+  } else if(message.type==='kill') {
+    if(message.uuid === myID) {
       players[myID].kills++;
       sendState();
     }
-  }else if(message.type==='leave'){
+  } else if(message.type==='leave') {
     delete players[message.uuid];
   }
 }});
-pubnub.subscribe({channels:[channel]});
+pubnub.subscribe({ channels:[channel] });
 
-// 6) Morte e respawn
+// 6) Morte e respawn manuale
 function die(){
-  isDead=true;
-  respawnBtn.style.display='block';
+  isDead = true;
+  respawnBtn.style.display = 'block';
 }
 function respawn(){
-  players[myID]={...players[myID],x:Math.random()*580,y:Math.random()*380,lives:3};
-  isDead=false;
-  respawnBtn.style.display='none';
+  players[myID].lives = 3;
+  players[myID].x = Math.random()*580;
+  players[myID].y = Math.random()*380;
+  isDead = false;
+  // reset kill-processing per rinascita
+  processedKill = {};
+  respawnBtn.style.display = 'none';
   sendState();
 }
 
-// 7) Render loop
+// 7) Loop di rendering
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  // cuori+kill
-  if(players[myID]){
-    let h='';
-    for(let i=0;i<3;i++)h+= i<players[myID].lives?'❤️':'🖤';
-    ctx.fillStyle='white';ctx.font='20px sans-serif';
-    ctx.fillText(h+'  Kill:'+players[myID].kills,10,25);
+
+  // 7a) Cuori + kill in alto a sinistra
+  if(players[myID]) {
+    let hearts = '';
+    for(let i=0;i<3;i++) hearts += i<players[myID].lives ? '❤️' : '🖤';
+    ctx.fillStyle='white'; ctx.font='20px sans-serif';
+    ctx.fillText(hearts + '  Kill: ' + players[myID].kills, 10, 25);
   }
-  // disegna players
-  for(let id in players){
-    if(id===myID&&isDead)continue;
-    const p=players[id];
-    ctx.fillStyle=p.color;ctx.fillRect(p.x,p.y,20,20);
-    ctx.fillStyle='white';ctx.font='12px sans-serif';
-    ctx.fillText(p.name,p.x,p.y-5);
+
+  // 7b) Disegna players
+  for(let id in players) {
+    if(id===myID && isDead) continue;
+    const p = players[id];
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, 20, 20);
+    ctx.fillStyle='white'; ctx.font='12px sans-serif';
+    ctx.fillText(p.name, p.x, p.y-5);
   }
-  // sposta e disegna proiettili
-  const now=Date.now();
-  bullets=bullets.filter(b=>now-b.start<3000);
-  bullets.forEach((b,i)=>{
-    const sp=5,dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);
-    if(d>0){b.x+=dx/d*sp; b.y+=dy/d*sp;}
-    ctx.fillStyle='yellow';ctx.beginPath();
-    ctx.arc(b.x,b.y,5,0,2*Math.PI);ctx.fill();
+
+  // 7c) Muovi e disegna proiettili
+  const now = Date.now();
+  bullets = bullets.filter(b => now - b.start < 3000);
+  bullets.forEach((b,i) => {
+    const speed=5, dx=b.tx-b.x, dy=b.ty-b.y, d=Math.hypot(dx,dy);
+    if(d>0){ b.x += dx/d*speed; b.y += dy/d*speed; }
+    ctx.fillStyle='yellow'; ctx.beginPath();
+    ctx.arc(b.x,b.y,5,0,2*Math.PI); ctx.fill();
     // collisione
-    for(let id in players){
-      if(id===b.owner)continue;
+    for(let id in players) {
+      if(id===b.owner||players[id].lives<=0) continue;
       const p=players[id];
       if(b.x>p.x&&b.x<p.x+20&&b.y>p.y&&b.y<p.y+20){
-        // invia hit con owner
-        pubnub.publish({channel,message:{type:'hit',target:id,owner:b.owner}});
+        pubnub.publish({ channel, message:{ type:'hit', target:id, owner:b.owner } });
         bullets.splice(i,1);
         sendBullets();
         break;
       }
     }
   });
-  // classifica
-  const sorted=Object.values(players).sort((a,b)=>b.kills-a.kills);
-  ctx.fillStyle='white';ctx.font='16px sans-serif';
-  sorted.forEach((p,i)=>ctx.fillText(`${p.name}:${p.kills}`,canvas.width-150,25+i*20));
-  // sei morto
-  if(isDead){
-    ctx.fillStyle='red';ctx.font='40px sans-serif';
-    ctx.fillText('SEI MORTO',canvas.width/2-120,canvas.height/2);
+
+  // 7d) Classifica globale in alto a destra
+  const sorted = Object.values(players)
+                       .sort((a,b)=>b.kills - a.kills);
+  ctx.fillStyle='white'; ctx.font='16px sans-serif';
+  sorted.forEach((p,i)=>ctx.fillText(`${p.name}: ${p.kills}`, canvas.width-150, 25+i*20));
+
+  // 7e) Messaggio "SEI MORTO"
+  if(isDead) {
+    ctx.fillStyle='red'; ctx.font='40px sans-serif';
+    ctx.fillText('SEI MORTO', canvas.width/2-120, canvas.height/2);
   }
+
   requestAnimationFrame(draw);
 }
 
-// 8) leave
-window.addEventListener('beforeunload',()=>{
-  pubnub.publish({channel,message:{type:'leave',uuid:myID}});
+// 8) Notifica uscita
+window.addEventListener('beforeunload', ()=>{
+  pubnub.publish({ channel, message:{ type:'leave', uuid:myID } });
 });
 </script>
 </body>
