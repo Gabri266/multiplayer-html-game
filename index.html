@@ -34,6 +34,7 @@
       border: none;
       border-radius: 8px;
       touch-action: manipulation;
+      user-select: none;
     }
   </style>
 </head>
@@ -62,11 +63,9 @@
 
   let players = {};
   let bullets = [];
-  let myLives = 3;
-  let myKills = 0;
   let isDead = false;
 
-  // Posizione iniziale e colore player
+  // Inizializza il player
   players[myID] = {
     x: Math.random() * 580,
     y: Math.random() * 380,
@@ -75,6 +74,7 @@
     lives: 3,
   };
 
+  // Movimento
   function move(key) {
     if (isDead) return;
     const dirs = {
@@ -92,6 +92,27 @@
     }
   }
   document.addEventListener('keydown', e => move(e.key));
+  window.move = move; // export per i bottoni
+
+  // Sparo con click o tap
+  canvas.addEventListener('click', e => {
+    if (isDead) return;
+    const rect = canvas.getBoundingClientRect();
+    const tx = e.clientX - rect.left;
+    const ty = e.clientY - rect.top;
+    const me = players[myID];
+    bullets.push({
+      id: myID + "-" + Date.now(),
+      x: me.x + 10,
+      y: me.y + 10,
+      tx, ty,
+      owner: myID,
+      start: Date.now()
+    });
+    sendBullets();
+  });
+
+  // Invia posizione player
   function sendState() {
     pubnub.publish({
       channel,
@@ -103,32 +124,7 @@
     });
   }
 
-  // Mobile controls buttons
-  function moveButton(key) {
-    move(key);
-  }
-  window.move = moveButton; // export to html buttons
-
-  // Sparo
-  canvas.addEventListener('click', e => {
-    if (isDead) return;
-    const rect = canvas.getBoundingClientRect();
-    const tx = e.clientX - rect.left;
-    const ty = e.clientY - rect.top;
-    const me = players[myID];
-    const bullet = {
-      id: myID + "-" + Date.now(),
-      x: me.x + 10,
-      y: me.y + 10,
-      tx, ty,
-      owner: myID,
-      start: Date.now()
-    };
-    bullets.push(bullet);
-    sendBullets();
-  });
-
-  // Invia stato bullets
+  // Invia proiettili
   function sendBullets() {
     pubnub.publish({
       channel,
@@ -139,7 +135,7 @@
     });
   }
 
-  // Gestione messaggi PubNub
+  // Listener messaggi PubNub
   pubnub.addListener({
     message: ({ message }) => {
       if (message.type === 'state') {
@@ -152,21 +148,17 @@
       } else if (message.type === 'hit') {
         if (message.uuid === myID) {
           players[myID].lives--;
-          if (players[myID].lives <= 0) {
-            die();
-          }
+          if (players[myID].lives <= 0) die();
         } else if (players[message.uuid]) {
           players[message.uuid].lives--;
           if (players[message.uuid].lives <= 0) {
-            // Per gli altri, rimuovi o gestisci respawn remoto?
-            // Qui solo resetto vite senza respawn per semplificare
+            // Per altri reset vite (semplificato)
             players[message.uuid].lives = 3;
           }
         }
       } else if (message.type === 'kill') {
         if (message.uuid === myID) {
-          myKills++;
-          players[myID].kills = myKills;
+          players[myID].kills++;
           sendState();
         }
       } else if (message.type === 'leave') {
@@ -176,7 +168,7 @@
   });
   pubnub.subscribe({ channels: [channel] });
 
-  // Funzione morte
+  // Morte e respawn
   function die() {
     isDead = true;
     setTimeout(() => {
@@ -192,12 +184,11 @@
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Disegna vite e kills in alto a sinistra (solo per me)
+    // Vite e kill in alto a sinistra
     const me = players[myID];
     if (me) {
-      // Cuori rossi e neri
       let hearts = '';
-      for(let i=0; i<3; i++) {
+      for(let i = 0; i < 3; i++) {
         hearts += i < me.lives ? '❤️' : '🖤';
       }
       ctx.fillStyle = 'white';
@@ -205,10 +196,11 @@
       ctx.fillText(hearts + '  Kill: ' + (me.kills || 0), 10, 25);
     }
 
-    // Disegna player
+    // Disegna player (tranne se morto)
     for (let id in players) {
       if (id === myID && isDead) continue;
       const p = players[id];
+      if (p.lives <= 0) continue;
       ctx.fillStyle = p.color;
       ctx.fillRect(p.x, p.y, 20, 20);
       if (id === myID) {
@@ -218,7 +210,7 @@
       }
     }
 
-    // Muovi e disegna proiettili
+    // Muovi e disegna proiettili, rimuovi dopo 3 secondi
     const now = Date.now();
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
@@ -236,25 +228,16 @@
       ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
       ctx.fill();
 
-      // Controllo collisione con players (non owner)
+      // Collisione con player (escludi owner)
       for (let id in players) {
         if (id === b.owner) continue;
-        if (players[id].lives <= 0) continue;
-        let p = players[id];
+        const p = players[id];
+        if (p.lives <= 0) continue;
         if (b.x > p.x && b.x < p.x + 20 && b.y > p.y && b.y < p.y + 20) {
-          // Segnala hit a tutti
-          pubnub.publish({
-            channel,
-            message: { type: 'hit', uuid: id }
-          });
-          // Se colpisce un player diverso da owner aumenta kill owner
+          pubnub.publish({ channel, message: { type: 'hit', uuid: id }});
           if (b.owner === myID) {
-            pubnub.publish({
-              channel,
-              message: { type: 'kill', uuid: myID }
-            });
+            pubnub.publish({ channel, message: { type: 'kill', uuid: myID }});
           }
-          // Rimuovi proiettile
           bullets.splice(i, 1);
           sendBullets();
           break;
@@ -262,10 +245,11 @@
       }
     });
 
+    // Messaggio "SEI MORTO"
     if (isDead) {
       ctx.fillStyle = "red";
       ctx.font = "40px sans-serif";
-      ctx.fillText("SEI MORTO", canvas.width/2 - 120, canvas.height/2);
+      ctx.fillText("SEI MORTO", canvas.width / 2 - 120, canvas.height / 2);
     }
 
     requestAnimationFrame(draw);
@@ -273,6 +257,7 @@
 
   draw();
 
+  // Notifica abbandono
   window.addEventListener('beforeunload', () => {
     pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
   });
