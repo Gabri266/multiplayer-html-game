@@ -97,7 +97,7 @@
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
-  // Gestione UUID persistente (per evitare che cambi ogni reload)
+  // Gestione UUID persistente (evita che cambi ad ogni reload)
   let storedUUID = localStorage.getItem('playerUUID');
   if (!storedUUID) {
     storedUUID = 'player-' + Date.now();
