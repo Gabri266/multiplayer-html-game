@@ -16,7 +16,6 @@
       margin: 20px auto 0;
       background: #222;
       border: 2px solid #fff;
-      touch-action: none;
     }
     #ui {
       display: flex;
@@ -43,17 +42,43 @@
       background: red;
       font-size: 24px;
     }
+    #nameInput {
+      position: absolute;
+      top: 40%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      text-align: center;
+    }
+    #nameInput input {
+      font-size: 24px;
+      padding: 10px;
+      border-radius: 8px;
+      width: 200px;
+    }
+    #nameInput button {
+      margin-top: 10px;
+      font-size: 20px;
+    }
   </style>
 </head>
 <body>
 
+<div id="nameInput">
+  <input type="text" id="playerName" placeholder="Inserisci il tuo nome" />
+  <br />
+  <button onclick="startGame()">Entra nel gioco</button>
+</div>
+
 <canvas id="game" width="600" height="400"></canvas>
+
 <div id="ui">
   <button onclick="move('ArrowLeft')">◀</button>
   <button onclick="move('ArrowUp')">▲</button>
   <button onclick="move('ArrowDown')">▼</button>
   <button onclick="move('ArrowRight')">▶</button>
 </div>
+
 <button id="respawnBtn" onclick="respawn()">RESPAWNA</button>
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
@@ -68,25 +93,34 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const myID = pubnub.getUUID();
-  const respawnBtn = document.getElementById("respawnBtn");
 
   let players = {};
   let bullets = [];
   let isDead = false;
   let lastShotTime = 0;
+  const respawnBtn = document.getElementById("respawnBtn");
 
-  // Inizializza player
-  players[myID] = {
-    x: Math.random() * 580,
-    y: Math.random() * 380,
-    color: '#' + Math.floor(Math.random() * 16777215).toString(16),
-    kills: 0,
-    lives: 3,
-    hits: 0
-  };
+  function startGame() {
+    const name = document.getElementById("playerName").value.trim();
+    if (!name) return alert("Inserisci un nome!");
+
+    players[myID] = {
+      name: name,
+      x: Math.random() * 580,
+      y: Math.random() * 380,
+      color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+      kills: 0,
+      lives: 3,
+      hits: 0
+    };
+
+    document.getElementById("nameInput").style.display = "none";
+    sendState();
+    draw();
+  }
 
   function move(key) {
-    if (isDead) return;
+    if (isDead || !players[myID]) return;
     const dirs = {
       ArrowLeft: { dx: -5, dy: 0 },
       ArrowRight: { dx: +5, dy: 0 },
@@ -105,9 +139,8 @@
   document.addEventListener('keydown', e => move(e.key));
   window.move = move;
 
-  // Sparo con cooldown
   canvas.addEventListener('click', e => {
-    if (isDead) return;
+    if (isDead || !players[myID]) return;
     const now = Date.now();
     if (now - lastShotTime < 1000) return;
     lastShotTime = now;
@@ -167,7 +200,7 @@
           if (players[message.uuid].lives <= 0 && message.uuid === myID) die();
         }
       } else if (message.type === 'kill') {
-        if (message.uuid === myID) {
+        if (message.uuid === myID && players[myID]) {
           players[myID].kills++;
           sendState();
         }
@@ -196,6 +229,7 @@
 
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     const me = players[myID];
     if (me) {
       let hearts = '';
@@ -212,11 +246,9 @@
       const p = players[id];
       ctx.fillStyle = p.color;
       ctx.fillRect(p.x, p.y, 20, 20);
-      if (id === myID) {
-        ctx.fillStyle = "white";
-        ctx.font = "12px sans-serif";
-        ctx.fillText("You", p.x, p.y - 5);
-      }
+      ctx.fillStyle = "white";
+      ctx.font = "12px sans-serif";
+      ctx.fillText(p.name || "Player", p.x, p.y - 5);
     }
 
     const now = Date.now();
@@ -251,6 +283,14 @@
       }
     });
 
+    // Classifica globale in alto a destra
+    const sorted = Object.values(players).sort((a, b) => (b.kills || 0) - (a.kills || 0));
+    ctx.fillStyle = 'white';
+    ctx.font = '16px sans-serif';
+    sorted.forEach((p, i) => {
+      ctx.fillText(`${p.name || 'Anon'}: ${p.kills || 0}`, canvas.width - 150, 25 + i * 20);
+    });
+
     if (isDead) {
       ctx.fillStyle = "red";
       ctx.font = "40px sans-serif";
@@ -259,8 +299,6 @@
 
     requestAnimationFrame(draw);
   }
-
-  draw();
 
   window.addEventListener('beforeunload', () => {
     pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
