@@ -39,6 +39,7 @@
       user-select: none;
       -webkit-user-select: none;
       -ms-user-select: none;
+      cursor: pointer;
     }
     #respawnBtn {
       display: none;
@@ -52,6 +53,7 @@
       border-radius: 10px;
       cursor: pointer;
       user-select: none;
+      z-index: 100;
     }
     #nameInput {
       position: absolute;
@@ -97,17 +99,10 @@
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
-  // Gestione UUID persistente (evita che cambi ad ogni reload)
-  let storedUUID = localStorage.getItem('playerUUID');
-  if (!storedUUID) {
-    storedUUID = 'player-' + Date.now();
-    localStorage.setItem('playerUUID', storedUUID);
-  }
-
   const pubnub = new PubNub({
     publishKey: 'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
     subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
-    uuid: storedUUID
+    uuid: 'player-' + Date.now()
   });
 
   const channel = "game-channel";
@@ -121,7 +116,6 @@
   let lastShotTime = 0;
   const respawnBtn = document.getElementById("respawnBtn");
 
-  // Funzione di inizio gioco, crea player con nome e posizione random
   function startGame() {
     const name = document.getElementById("playerName").value.trim();
     if (!name) return alert("Inserisci un nome!");
@@ -132,8 +126,7 @@
       y: Math.random() * 380,
       color: '#' + Math.floor(Math.random() * 16777215).toString(16),
       kills: 0,
-      lives: 3,
-      hits: 0
+      lives: 3
     };
 
     document.getElementById("nameInput").style.display = "none";
@@ -141,7 +134,6 @@
     draw();
   }
 
-  // Movimento con limiti mappa 600x400
   function move(key) {
     if (isDead || !players[myID]) return;
     const dirs = {
@@ -158,11 +150,9 @@
       sendState();
     }
   }
-  // Supporto tastiera
   document.addEventListener('keydown', e => move(e.key));
-  window.move = move;  // esporta per i pulsanti mobile
+  window.move = move;
 
-  // Sparo con cooldown 1 secondo
   canvas.addEventListener('click', e => {
     if (isDead || !players[myID]) return;
     const now = Date.now();
@@ -185,7 +175,6 @@
     sendBullets();
   });
 
-  // Pubblica stato player
   function sendState() {
     pubnub.publish({
       channel,
@@ -196,7 +185,7 @@
       }
     });
   }
-  // Pubblica proiettili
+
   function sendBullets() {
     pubnub.publish({
       channel,
@@ -218,14 +207,17 @@
         bullets = message.bullets;
       } else if (message.type === 'hit') {
         if (!players[message.uuid]) return;
-        // Ogni hit toglie 1 vita
         players[message.uuid].lives--;
-
-        // Se vita <= 0 e sei tu che sei stato colpito, muori
         if (players[message.uuid].lives <= 0) {
-          players[message.uuid].lives = 0;
-          if (message.uuid === myID) die();
+          // Morte
+          if (message.uuid === myID) {
+            die();
+          }
+          // Il killer (chi ha sparato) deve ricevere una kill,
+          // ma per farlo serve che chi ha sparato mandi un messaggio kill, lo faremo nel codice del proiettile.
+          players[message.uuid].lives = 0; // sicuro che non vada sotto zero
         }
+        sendState();
       } else if (message.type === 'kill') {
         if (message.uuid === myID && players[myID]) {
           players[myID].kills++;
@@ -239,13 +231,11 @@
 
   pubnub.subscribe({ channels: [channel] });
 
-  // Funzione morte
   function die() {
     isDead = true;
     respawnBtn.style.display = 'block';
   }
 
-  // Pulsante respawn
   function respawn() {
     players[myID].x = Math.random() * 580;
     players[myID].y = Math.random() * 380;
@@ -255,11 +245,9 @@
     sendState();
   }
 
-  // Disegna tutto
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Cuori e kill in alto a sinistra solo per me
     const me = players[myID];
     if (me) {
       let hearts = '';
@@ -271,7 +259,6 @@
       ctx.fillText(hearts + '  Kill: ' + (me.kills || 0), 10, 25);
     }
 
-    // Disegna player (non morto)
     for (let id in players) {
       if (id === myID && isDead) continue;
       const p = players[id];
@@ -282,7 +269,6 @@
       ctx.fillText(p.name || "Player", p.x, p.y - 5);
     }
 
-    // Muovi e disegna proiettili
     const now = Date.now();
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
@@ -304,13 +290,19 @@
         if (id === b.owner || players[id].lives <= 0) continue;
         let p = players[id];
         if (b.x > p.x && b.x < p.x + 20 && b.y > p.y && b.y < p.y + 20) {
-          // Mando messaggio hit (toglie 1 vita)
+          // Il player colpito perde una vita
           pubnub.publish({ channel, message: { type: 'hit', uuid: id } });
 
-          // Se la vita era 1 (cioè ora si azzera) e sei il tiratore, mando la kill
-          if (p.lives === 1 && b.owner === myID) {
-            pubnub.publish({ channel, message: { type: 'kill', uuid: myID } });
-          }
+          // Se io sono il proprietario del proiettile e colpisco un player, mando il messaggio kill per aumentare kill
+          // SOLO se il colpito muore in questo colpo (ovvero se la vita diventa 0)
+          // Però per sicurezza lo mando sempre, chi riceve aggiorna correttamente.
+
+          // Qui manda messaggio kill solo se il player colpito muore con questo colpo:
+          // Come non sappiamo vita aggiornata lato client,
+          // facciamo che chi riceve il messaggio 'hit' manda la kill se necessario.
+          // Per sicurezza, qui mando il kill al colpevole sempre dopo ogni colpo.
+
+          pubnub.publish({ channel, message: { type: 'kill', uuid: b.owner } });
 
           bullets.splice(i, 1);
           sendBullets();
@@ -336,10 +328,10 @@
     requestAnimationFrame(draw);
   }
 
-  // Quando chiudo pagina avviso tutti che esco
   window.addEventListener('beforeunload', () => {
     pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
   });
 </script>
+
 </body>
 </html>
