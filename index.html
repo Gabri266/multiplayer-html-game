@@ -5,17 +5,34 @@
   <title>Gioco Multiplayer con PubNub</title>
   <style>
     body { background: #000; color: #fff; text-align: center; font-family: sans-serif; }
-    canvas { background: #222; display: block; margin: 20px auto; border: 2px solid #fff; }
+    canvas { background: #222; display: block; margin: 20px auto; border: 2px solid #fff; touch-action: none; }
+    #hearts {
+      position: fixed; top: 10px; right: 20px;
+      font-size: 30px; color: red; z-index: 100;
+    }
+    .button {
+      position: fixed; bottom: 20px; font-size: 20px;
+      background: #444; color: white; padding: 10px;
+      border-radius: 5px;
+    }
+    #left  { left: 20px; }
+    #right { left: 100px; }
+    #up    { left: 60px; bottom: 80px; }
+    #down  { left: 60px; bottom: -20px; }
   </style>
 </head>
 <body>
   <h1>Gioco Multiplayer (HTML + JS + PubNub)</h1>
+  <div id="hearts">❤️❤️❤️</div>
   <canvas id="game" width="600" height="400"></canvas>
 
-  <!-- 1) Includi PubNub -->
+  <div class="button" id="left">◀</div>
+  <div class="button" id="right">▶</div>
+  <div class="button" id="up">▲</div>
+  <div class="button" id="down">▼</div>
+
   <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
   <script>
-    // 2) Inizializza PubNub
     const pubnub = new PubNub({
       publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
       subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
@@ -25,64 +42,140 @@
     const channel = "game-channel";
     const canvas = document.getElementById('game');
     const ctx    = canvas.getContext('2d');
+    const myID   = pubnub.getUUID();
     let players  = {};
+    let bullets  = [];
+    let myLives  = 3;
 
-    // 3) Quando arriva un messaggio, aggiorniamo posizioni
-    pubnub.addListener({
-      message: m => {
-        players = m.message;
-        draw();
-      }
-    });
-    pubnub.subscribe({ channels: [channel] });
-
-    // 4) Genera il tuo personaggio
-    const me = {
-      x: Math.random()*580 + 10,
-      y: Math.random()*380 + 10,
+    // Posizione iniziale e colore
+    players[myID] = {
+      x: Math.random()*580,
+      y: Math.random()*380,
       color: '#' + Math.floor(Math.random()*16777215).toString(16)
     };
-    players[pubnub.getUUID()] = me;
-    publish();
 
-    // 5) Pubblica la posizione a ogni mossa
+    updateHearts();
+
+    // Mobile controls
+    const dirs = {
+      left:  { dx: -5, dy: 0 },
+      right: { dx: +5, dy: 0 },
+      up:    { dx: 0,  dy: -5 },
+      down:  { dx: 0,  dy: +5 }
+    };
+    for (let dir in dirs) {
+      document.getElementById(dir).addEventListener('touchstart', () => move(dirs[dir]));
+    }
+
+    // Tastiera
     document.addEventListener('keydown', e => {
-      const dirs = {
-        ArrowLeft: { dx: -5, dy:  0 },
-        ArrowRight:{ dx: +5, dy:  0 },
-        ArrowUp:   { dx:  0, dy: -5 },
-        ArrowDown: { dx:  0, dy: +5 }
+      const mappa = {
+        ArrowLeft: dirs.left,
+        ArrowRight: dirs.right,
+        ArrowUp: dirs.up,
+        ArrowDown: dirs.down
       };
-      if (dirs[e.key]) {
-        me.x += dirs[e.key].dx;
-        me.y += dirs[e.key].dy;
-        players[pubnub.getUUID()] = me;
-        publish();
-      }
+      if (mappa[e.key]) move(mappa[e.key]);
     });
 
-    // 6) Funzione per inviare lo stato di tutti i giocatori
-    function publish() {
+    function move(dir) {
+      let me = players[myID];
+      me.x = Math.max(0, Math.min(580, me.x + dir.dx));
+      me.y = Math.max(0, Math.min(380, me.y + dir.dy));
+      sendMove();
+    }
+
+    function sendMove() {
       pubnub.publish({
-        channel: channel,
-        message: players
+        channel,
+        message: {
+          type: 'move',
+          uuid: myID,
+          data: players[myID]
+        }
       });
     }
 
-    // 7) Disegna tutto
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const tx = e.clientX - rect.left;
+      const ty = e.clientY - rect.top;
+      bullets.push({ x: players[myID].x+10, y: players[myID].y+10, tx, ty, owner: myID });
+    });
+
+    // Ricevi messaggi
+    pubnub.addListener({
+      message: ({ message }) => {
+        const { type, uuid, data, target } = message;
+
+        if (type === 'move') {
+          players[uuid] = data;
+        } else if (type === 'hit' && uuid === myID) {
+          myLives = Math.max(0, myLives - 1);
+          updateHearts();
+        } else if (type === 'leave') {
+          delete players[uuid];
+        }
+      }
+    });
+    pubnub.subscribe({ channels: [channel] });
+    sendMove();
+
+    function updateHearts() {
+      document.getElementById('hearts').innerHTML = '❤️'.repeat(myLives) + '🖤'.repeat(3 - myLives);
+    }
+
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Giocatori
       for (let id in players) {
-        const p = players[id];
+        let p = players[id];
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, 20, 20);
       }
+
+      // Proiettili
+      bullets.forEach((b, i) => {
+        const speed = 6;
+        const dx = b.tx - b.x;
+        const dy = b.ty - b.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        b.x += (dx/dist)*speed;
+        b.y += (dy/dist)*speed;
+
+        ctx.fillStyle = 'yellow';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
+        ctx.fill();
+
+        for (let id in players) {
+          if (id !== b.owner) {
+            let p = players[id];
+            if (b.x > p.x && b.x < p.x+20 && b.y > p.y && b.y < p.y+20) {
+              pubnub.publish({
+                channel,
+                message: { type: 'hit', uuid: id }
+              });
+              bullets.splice(i, 1);
+              break;
+            }
+          }
+        }
+
+        if (b.x < 0 || b.x > 600 || b.y < 0 || b.y > 400) {
+          bullets.splice(i, 1);
+        }
+      });
+
+      requestAnimationFrame(draw);
     }
 
-    // 8) Pulisci alla chiusura
+    draw();
+
+    // Cancella giocatore se esce
     window.addEventListener('beforeunload', () => {
-      delete players[pubnub.getUUID()];
-      publish();
+      pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
     });
   </script>
 </body>
