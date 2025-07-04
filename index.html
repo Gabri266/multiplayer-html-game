@@ -97,10 +97,17 @@
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
+  // Gestione UUID persistente (per evitare che cambi ogni reload)
+  let storedUUID = localStorage.getItem('playerUUID');
+  if (!storedUUID) {
+    storedUUID = 'player-' + Date.now();
+    localStorage.setItem('playerUUID', storedUUID);
+  }
+
   const pubnub = new PubNub({
     publishKey: 'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
     subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
-    uuid: 'player-' + Date.now()
+    uuid: storedUUID
   });
 
   const channel = "game-channel";
@@ -329,12 +336,10 @@
     requestAnimationFrame(draw);
   }
 
-
   // Quando chiudo pagina avviso tutti che esco
   window.addEventListener('beforeunload', () => {
     pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
   });
 </script>
-
 </body>
 </html>
