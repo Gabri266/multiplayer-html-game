@@ -200,7 +200,6 @@
     });
   }
 
-  // Listener messaggi
   pubnub.addListener({
     message: ({ message }) => {
       if (message.type === 'state') {
@@ -212,11 +211,13 @@
         bullets = message.bullets;
       } else if (message.type === 'hit') {
         if (!players[message.uuid]) return;
-        players[message.uuid].hits = (players[message.uuid].hits || 0) + 1;
-        if (players[message.uuid].hits >= 3) {
-          players[message.uuid].lives--;
-          players[message.uuid].hits = 0;
-          if (players[message.uuid].lives <= 0 && message.uuid === myID) die();
+        // Ogni hit toglie 1 vita
+        players[message.uuid].lives--;
+
+        // Se vita <= 0 e sei tu che sei stato colpito, muori
+        if (players[message.uuid].lives <= 0) {
+          players[message.uuid].lives = 0;
+          if (message.uuid === myID) die();
         }
       } else if (message.type === 'kill') {
         if (message.uuid === myID && players[myID]) {
@@ -228,6 +229,7 @@
       }
     }
   });
+
   pubnub.subscribe({ channels: [channel] });
 
   // Funzione morte
@@ -235,12 +237,12 @@
     isDead = true;
     respawnBtn.style.display = 'block';
   }
+
   // Pulsante respawn
   function respawn() {
     players[myID].x = Math.random() * 580;
     players[myID].y = Math.random() * 380;
     players[myID].lives = 3;
-    players[myID].hits = 0;
     isDead = false;
     respawnBtn.style.display = 'none';
     sendState();
@@ -273,7 +275,7 @@
       ctx.fillText(p.name || "Player", p.x, p.y - 5);
     }
 
-    // Gestione proiettili, muovono e collisioni
+    // Muovi e disegna proiettili
     const now = Date.now();
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
@@ -291,16 +293,15 @@
       ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
       ctx.fill();
 
-      // Collisione proiettile con player (non il proprietario)
       for (let id in players) {
         if (id === b.owner || players[id].lives <= 0) continue;
         let p = players[id];
         if (b.x > p.x && b.x < p.x + 20 && b.y > p.y && b.y < p.y + 20) {
-          // Pubblica colpo
+          // Mando messaggio hit (toglie 1 vita)
           pubnub.publish({ channel, message: { type: 'hit', uuid: id } });
 
-          // Se io ho sparato e questo è il colpito, mando kill solo se colpi almeno 3 volte (gestito lato hit)
-          if (b.owner === myID) {
+          // Se la vita era 1 (cioè ora si azzera) e sei il tiratore, mando la kill
+          if (p.lives === 1 && b.owner === myID) {
             pubnub.publish({ channel, message: { type: 'kill', uuid: myID } });
           }
 
@@ -319,7 +320,6 @@
       ctx.fillText(`${p.name || 'Anon'}: ${p.kills || 0}`, canvas.width - 150, 25 + i * 20);
     });
 
-    // Messaggio SEI MORTO centrato solo per chi muore
     if (isDead) {
       ctx.fillStyle = "red";
       ctx.font = "40px sans-serif";
@@ -328,6 +328,7 @@
 
     requestAnimationFrame(draw);
   }
+
 
   // Quando chiudo pagina avviso tutti che esco
   window.addEventListener('beforeunload', () => {
