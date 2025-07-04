@@ -23,6 +23,10 @@
       flex-wrap: wrap;
       margin-top: 10px;
       gap: 10px;
+      user-select: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
+      touch-action: manipulation;
     }
     button {
       padding: 15px 20px;
@@ -32,6 +36,9 @@
       border: none;
       border-radius: 8px;
       touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
+      -ms-user-select: none;
     }
     #respawnBtn {
       display: none;
@@ -41,6 +48,10 @@
       transform: translate(-50%, -50%);
       background: red;
       font-size: 24px;
+      padding: 15px 30px;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
     }
     #nameInput {
       position: absolute;
@@ -49,23 +60,26 @@
       transform: translate(-50%, -50%);
       z-index: 10;
       text-align: center;
+      user-select: none;
     }
     #nameInput input {
       font-size: 24px;
       padding: 10px;
       border-radius: 8px;
       width: 200px;
+      user-select: text;
     }
     #nameInput button {
       margin-top: 10px;
       font-size: 20px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
 
 <div id="nameInput">
-  <input type="text" id="playerName" placeholder="Inserisci il tuo nome" />
+  <input type="text" id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off" autocorrect="off" autocapitalize="off" />
   <br />
   <button onclick="startGame()">Entra nel gioco</button>
 </div>
@@ -100,6 +114,7 @@
   let lastShotTime = 0;
   const respawnBtn = document.getElementById("respawnBtn");
 
+  // Funzione di inizio gioco, crea player con nome e posizione random
   function startGame() {
     const name = document.getElementById("playerName").value.trim();
     if (!name) return alert("Inserisci un nome!");
@@ -119,6 +134,7 @@
     draw();
   }
 
+  // Movimento con limiti mappa 600x400
   function move(key) {
     if (isDead || !players[myID]) return;
     const dirs = {
@@ -135,10 +151,11 @@
       sendState();
     }
   }
-
+  // Supporto tastiera
   document.addEventListener('keydown', e => move(e.key));
-  window.move = move;
+  window.move = move;  // esporta per i pulsanti mobile
 
+  // Sparo con cooldown 1 secondo
   canvas.addEventListener('click', e => {
     if (isDead || !players[myID]) return;
     const now = Date.now();
@@ -161,6 +178,7 @@
     sendBullets();
   });
 
+  // Pubblica stato player
   function sendState() {
     pubnub.publish({
       channel,
@@ -171,7 +189,7 @@
       }
     });
   }
-
+  // Pubblica proiettili
   function sendBullets() {
     pubnub.publish({
       channel,
@@ -182,6 +200,7 @@
     });
   }
 
+  // Listener messaggi
   pubnub.addListener({
     message: ({ message }) => {
       if (message.type === 'state') {
@@ -209,14 +228,14 @@
       }
     }
   });
-
   pubnub.subscribe({ channels: [channel] });
 
+  // Funzione morte
   function die() {
     isDead = true;
     respawnBtn.style.display = 'block';
   }
-
+  // Pulsante respawn
   function respawn() {
     players[myID].x = Math.random() * 580;
     players[myID].y = Math.random() * 380;
@@ -227,9 +246,11 @@
     sendState();
   }
 
+  // Disegna tutto
   function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Cuori e kill in alto a sinistra solo per me
     const me = players[myID];
     if (me) {
       let hearts = '';
@@ -241,6 +262,7 @@
       ctx.fillText(hearts + '  Kill: ' + (me.kills || 0), 10, 25);
     }
 
+    // Disegna player (non morto)
     for (let id in players) {
       if (id === myID && isDead) continue;
       const p = players[id];
@@ -251,6 +273,7 @@
       ctx.fillText(p.name || "Player", p.x, p.y - 5);
     }
 
+    // Gestione proiettili, muovono e collisioni
     const now = Date.now();
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
@@ -268,14 +291,19 @@
       ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
       ctx.fill();
 
+      // Collisione proiettile con player (non il proprietario)
       for (let id in players) {
         if (id === b.owner || players[id].lives <= 0) continue;
         let p = players[id];
         if (b.x > p.x && b.x < p.x + 20 && b.y > p.y && b.y < p.y + 20) {
+          // Pubblica colpo
           pubnub.publish({ channel, message: { type: 'hit', uuid: id } });
+
+          // Se io ho sparato e questo è il colpito, mando kill solo se colpi almeno 3 volte (gestito lato hit)
           if (b.owner === myID) {
             pubnub.publish({ channel, message: { type: 'kill', uuid: myID } });
           }
+
           bullets.splice(i, 1);
           sendBullets();
           break;
@@ -291,6 +319,7 @@
       ctx.fillText(`${p.name || 'Anon'}: ${p.kills || 0}`, canvas.width - 150, 25 + i * 20);
     });
 
+    // Messaggio SEI MORTO centrato solo per chi muore
     if (isDead) {
       ctx.fillStyle = "red";
       ctx.font = "40px sans-serif";
@@ -300,6 +329,7 @@
     requestAnimationFrame(draw);
   }
 
+  // Quando chiudo pagina avviso tutti che esco
   window.addEventListener('beforeunload', () => {
     pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
   });
