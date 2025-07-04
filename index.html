@@ -3,180 +3,238 @@
 <head>
   <meta charset="utf-8">
   <title>Gioco Multiplayer con PubNub</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
-    body { background: #000; color: #fff; text-align: center; font-family: sans-serif; }
-    canvas { background: #222; display: block; margin: 20px auto; border: 2px solid #fff; touch-action: none; }
-    #hearts {
-      position: fixed; top: 10px; right: 20px;
-      font-size: 30px; color: red; z-index: 100;
+    body {
+      background: #000; color: #fff; text-align: center;
+      font-family: sans-serif; margin: 0; padding: 0;
+      -ms-touch-action: none;
+          touch-action: none;
     }
-    .button {
-      position: fixed; bottom: 20px; font-size: 20px;
-      background: #444; color: white; padding: 10px;
-      border-radius: 5px;
+    canvas {
+      background: #222; display: block; margin: 20px auto 0;
+      border: 2px solid #fff;
+      touch-action: none;
     }
-    #left  { left: 20px; }
-    #right { left: 100px; }
-    #up    { left: 60px; bottom: 80px; }
-    #down  { left: 60px; bottom: -20px; }
+    #ui {
+      display: flex; justify-content: center;
+      flex-wrap: wrap; margin-top: 10px;
+      gap: 10px;
+    }
+    button {
+      padding: 15px 20px;
+      font-size: 18px;
+      background: #444;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      touch-action: manipulation;
+    }
+    #status {
+      position: absolute;
+      top: 10px; right: 20px;
+      font-size: 20px;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
-  <h1>Gioco Multiplayer (HTML + JS + PubNub)</h1>
-  <div id="hearts">❤️❤️❤️</div>
-  <canvas id="game" width="600" height="400"></canvas>
 
-  <div class="button" id="left">◀</div>
-  <div class="button" id="right">▶</div>
-  <div class="button" id="up">▲</div>
-  <div class="button" id="down">▼</div>
+<h1>Gioco Multiplayer con PubNub</h1>
+<div id="status">❤️❤️❤️<br>Kill: 0</div>
+<canvas id="game" width="600" height="400"></canvas>
+<div id="ui">
+  <button onclick="move('ArrowLeft')">◀</button>
+  <button onclick="move('ArrowUp')">▲</button>
+  <button onclick="move('ArrowDown')">▼</button>
+  <button onclick="move('ArrowRight')">▶</button>
+</div>
 
-  <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
-  <script>
-    const pubnub = new PubNub({
-      publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
-      subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
-      uuid:         'player-' + Date.now()
-    });
+<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
+<script>
+  const pubnub = new PubNub({
+    publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
+    subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
+    uuid:         'player-' + Date.now()
+  });
 
-    const channel = "game-channel";
-    const canvas = document.getElementById('game');
-    const ctx    = canvas.getContext('2d');
-    const myID   = pubnub.getUUID();
-    let players  = {};
-    let bullets  = [];
-    let myLives  = 3;
+  const channel = "game-channel";
+  const canvas  = document.getElementById('game');
+  const ctx     = canvas.getContext('2d');
+  const myID    = pubnub.getUUID();
 
-    // Posizione iniziale e colore
-    players[myID] = {
-      x: Math.random()*580,
-      y: Math.random()*380,
-      color: '#' + Math.floor(Math.random()*16777215).toString(16)
-    };
+  let players = {};
+  let bullets = [];
+  let myLives = 3;
+  let myKills = 0;
+  let isDead = false;
 
-    updateHearts();
+  // Posizione iniziale
+  players[myID] = {
+    x: Math.random()*580,
+    y: Math.random()*380,
+    color: '#' + Math.floor(Math.random()*16777215).toString(16),
+    kills: 0
+  };
 
-    // Mobile controls
+  updateUI();
+
+  function updateUI() {
+    document.getElementById("status").innerHTML =
+      '❤️'.repeat(myLives) + '🖤'.repeat(3 - myLives) +
+      `<br>Kill: ${myKills}`;
+  }
+
+  function move(key) {
+    if (isDead) return;
     const dirs = {
-      left:  { dx: -5, dy: 0 },
-      right: { dx: +5, dy: 0 },
-      up:    { dx: 0,  dy: -5 },
-      down:  { dx: 0,  dy: +5 }
+      ArrowLeft:  { dx: -5, dy:  0 },
+      ArrowRight: { dx: +5, dy:  0 },
+      ArrowUp:    { dx:  0, dy: -5 },
+      ArrowDown:  { dx:  0, dy: +5 }
     };
-    for (let dir in dirs) {
-      document.getElementById(dir).addEventListener('touchstart', () => move(dirs[dir]));
-    }
-
-    // Tastiera
-    document.addEventListener('keydown', e => {
-      const mappa = {
-        ArrowLeft: dirs.left,
-        ArrowRight: dirs.right,
-        ArrowUp: dirs.up,
-        ArrowDown: dirs.down
-      };
-      if (mappa[e.key]) move(mappa[e.key]);
-    });
-
-    function move(dir) {
+    const dir = dirs[key];
+    if (dir) {
       let me = players[myID];
       me.x = Math.max(0, Math.min(580, me.x + dir.dx));
       me.y = Math.max(0, Math.min(380, me.y + dir.dy));
       sendMove();
     }
+  }
 
-    function sendMove() {
-      pubnub.publish({
-        channel,
-        message: {
-          type: 'move',
-          uuid: myID,
-          data: players[myID]
-        }
-      });
-    }
+  document.addEventListener('keydown', e => move(e.key));
 
-    canvas.addEventListener('click', e => {
-      const rect = canvas.getBoundingClientRect();
-      const tx = e.clientX - rect.left;
-      const ty = e.clientY - rect.top;
-      bullets.push({ x: players[myID].x+10, y: players[myID].y+10, tx, ty, owner: myID });
-    });
+  canvas.addEventListener('click', e => {
+    if (isDead) return;
+    const rect = canvas.getBoundingClientRect();
+    const tx = e.clientX - rect.left;
+    const ty = e.clientY - rect.top;
+    const bullet = {
+      x: players[myID].x + 10,
+      y: players[myID].y + 10,
+      tx, ty,
+      owner: myID,
+      start: Date.now()
+    };
+    bullets.push(bullet);
+  });
 
-    // Ricevi messaggi
-    pubnub.addListener({
-      message: ({ message }) => {
-        const { type, uuid, data, target } = message;
-
-        if (type === 'move') {
-          players[uuid] = data;
-        } else if (type === 'hit' && uuid === myID) {
-          myLives = Math.max(0, myLives - 1);
-          updateHearts();
-        } else if (type === 'leave') {
-          delete players[uuid];
-        }
+  function sendMove() {
+    pubnub.publish({
+      channel,
+      message: {
+        type: 'move',
+        uuid: myID,
+        data: players[myID]
       }
     });
-    pubnub.subscribe({ channels: [channel] });
-    sendMove();
+  }
 
-    function updateHearts() {
-      document.getElementById('hearts').innerHTML = '❤️'.repeat(myLives) + '🖤'.repeat(3 - myLives);
+  pubnub.addListener({
+    message: ({ message }) => {
+      const { type, uuid, data } = message;
+
+      if (type === 'move') {
+        if (!players[uuid]) players[uuid] = {};
+        players[uuid].x = data.x;
+        players[uuid].y = data.y;
+        players[uuid].color = data.color;
+        players[uuid].kills = data.kills ?? 0;
+      }
+      if (type === 'hit' && uuid === myID) {
+        if (isDead) return;
+        myLives--;
+        updateUI();
+        if (myLives <= 0) {
+          isDead = true;
+          setTimeout(() => {
+            players[myID].x = Math.random()*580;
+            players[myID].y = Math.random()*380;
+            myLives = 3;
+            updateUI();
+            isDead = false;
+            sendMove();
+          }, 2000);
+        }
+      }
+      if (type === 'kill' && uuid === myID) {
+        myKills++;
+        updateUI();
+        players[myID].kills = myKills;
+        sendMove();
+      }
+      if (type === 'leave') {
+        delete players[uuid];
+      }
+    }
+  });
+  pubnub.subscribe({ channels: [channel] });
+
+  sendMove();
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Disegna giocatori
+    for (let id in players) {
+      const p = players[id];
+      if (id === myID && isDead) continue;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x, p.y, 20, 20);
+      if (id === myID) {
+        ctx.fillStyle = "white";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("You", p.x, p.y - 5);
+      }
     }
 
-    function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Disegna proiettili
+    const now = Date.now();
+    bullets = bullets.filter(b => now - b.start < 3000);
 
-      // Giocatori
+    bullets.forEach((b, i) => {
+      const speed = 5;
+      const dx = b.tx - b.x;
+      const dy = b.ty - b.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      b.x += (dx/dist) * speed;
+      b.y += (dy/dist) * speed;
+
+      ctx.fillStyle = 'yellow';
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
+      ctx.fill();
+
       for (let id in players) {
+        if (id === b.owner || (id === myID && isDead)) continue;
         let p = players[id];
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, 20, 20);
-      }
-
-      // Proiettili
-      bullets.forEach((b, i) => {
-        const speed = 6;
-        const dx = b.tx - b.x;
-        const dy = b.ty - b.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        b.x += (dx/dist)*speed;
-        b.y += (dy/dist)*speed;
-
-        ctx.fillStyle = 'yellow';
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 5, 0, 2 * Math.PI);
-        ctx.fill();
-
-        for (let id in players) {
-          if (id !== b.owner) {
-            let p = players[id];
-            if (b.x > p.x && b.x < p.x+20 && b.y > p.y && b.y < p.y+20) {
-              pubnub.publish({
-                channel,
-                message: { type: 'hit', uuid: id }
-              });
-              bullets.splice(i, 1);
-              break;
-            }
+        if (b.x > p.x && b.x < p.x+20 && b.y > p.y && b.y < p.y+20) {
+          if (id === myID) {
+            pubnub.publish({ channel, message: { type: 'hit', uuid: id } });
+          } else if (b.owner === myID) {
+            pubnub.publish({ channel, message: { type: 'kill', uuid: b.owner } });
           }
-        }
-
-        if (b.x < 0 || b.x > 600 || b.y < 0 || b.y > 400) {
           bullets.splice(i, 1);
+          break;
         }
-      });
+      }
+    });
 
-      requestAnimationFrame(draw);
+    // Scritta se morto
+    if (isDead) {
+      ctx.fillStyle = "red";
+      ctx.font = "40px sans-serif";
+      ctx.fillText("SEI MORTO", canvas.width/2 - 120, canvas.height/2);
     }
 
-    draw();
+    requestAnimationFrame(draw);
+  }
 
-    // Cancella giocatore se esce
-    window.addEventListener('beforeunload', () => {
-      pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
-    });
-  </script>
+  draw();
+
+  window.addEventListener('beforeunload', () => {
+    pubnub.publish({ channel, message: { type: 'leave', uuid: myID } });
+  });
+</script>
 </body>
 </html>
