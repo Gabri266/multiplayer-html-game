@@ -126,7 +126,8 @@
       y: Math.random() * 380,
       color: '#' + Math.floor(Math.random() * 16777215).toString(16),
       kills: 0,
-      lives: 3
+      lives: 3,
+      hits: 0  // contatore colpi ricevuti
     };
 
     document.getElementById("nameInput").style.display = "none";
@@ -156,7 +157,7 @@
   canvas.addEventListener('click', e => {
     if (isDead || !players[myID]) return;
     const now = Date.now();
-    if (now - lastShotTime < 1000) return;
+    if (now - lastShotTime < 1000) return;  // cooldown sparo 1s
     lastShotTime = now;
 
     const rect = canvas.getBoundingClientRect();
@@ -207,18 +208,21 @@
         bullets = message.bullets;
       } else if (message.type === 'hit') {
         if (!players[message.uuid]) return;
-        players[message.uuid].lives--;
-        if (players[message.uuid].lives <= 0) {
-          // Morte
+        // Aumenta il contatore hit
+        players[message.uuid].hits = (players[message.uuid].hits || 0) + 1;
+
+        if (players[message.uuid].hits >= 3) {
+          // Morte dopo 3 hit
+          players[message.uuid].hits = 0; // reset contatore hit
+          players[message.uuid].lives = 0;
+
           if (message.uuid === myID) {
             die();
           }
-          // Il killer (chi ha sparato) deve ricevere una kill,
-          // ma per farlo serve che chi ha sparato mandi un messaggio kill, lo faremo nel codice del proiettile.
-          players[message.uuid].lives = 0; // sicuro che non vada sotto zero
         }
         sendState();
       } else if (message.type === 'kill') {
+        // Il killer guadagna una kill
         if (message.uuid === myID && players[myID]) {
           players[myID].kills++;
           sendState();
@@ -240,6 +244,7 @@
     players[myID].x = Math.random() * 580;
     players[myID].y = Math.random() * 380;
     players[myID].lives = 3;
+    players[myID].hits = 0;
     isDead = false;
     respawnBtn.style.display = 'none';
     sendState();
@@ -290,19 +295,13 @@
         if (id === b.owner || players[id].lives <= 0) continue;
         let p = players[id];
         if (b.x > p.x && b.x < p.x + 20 && b.y > p.y && b.y < p.y + 20) {
-          // Il player colpito perde una vita
+          // Il player colpito riceve un hit
           pubnub.publish({ channel, message: { type: 'hit', uuid: id } });
 
-          // Se io sono il proprietario del proiettile e colpisco un player, mando il messaggio kill per aumentare kill
-          // SOLO se il colpito muore in questo colpo (ovvero se la vita diventa 0)
-          // Però per sicurezza lo mando sempre, chi riceve aggiorna correttamente.
-
-          // Qui manda messaggio kill solo se il player colpito muore con questo colpo:
-          // Come non sappiamo vita aggiornata lato client,
-          // facciamo che chi riceve il messaggio 'hit' manda la kill se necessario.
-          // Per sicurezza, qui mando il kill al colpevole sempre dopo ogni colpo.
-
-          pubnub.publish({ channel, message: { type: 'kill', uuid: b.owner } });
+          // Se il colpo è del giocatore mio, mando il messaggio kill per aggiornare le kill (verrà incrementata solo se il player muore)
+          if (b.owner === myID) {
+            pubnub.publish({ channel, message: { type: 'kill', uuid: myID } });
+          }
 
           bullets.splice(i, 1);
           sendBullets();
