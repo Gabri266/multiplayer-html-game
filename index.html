@@ -4,10 +4,7 @@
   <meta charset="utf-8" />
   <title>Multiplayer Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-
-  <!-- FONT MONOTON -->
   <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
-
   <style>
     body {
       margin: 0;
@@ -40,8 +37,6 @@
       border-radius: 8px;
       cursor: pointer;
       user-select: none;
-      -webkit-user-select: none;
-      -webkit-touch-callout: none;
     }
     #respawnBtn {
       display: none;
@@ -54,8 +49,6 @@
       padding: 15px 30px;
       border-radius: 10px;
       z-index: 10;
-      user-select: none;
-      -webkit-user-select: none;
     }
     #nameInput {
       position: absolute;
@@ -76,8 +69,6 @@
       margin-top: 10px;
       font-size: 20px;
     }
-
-    /* TITOLO MULTY */
     #gameTitle {
       font-family: 'Monoton', cursive;
       font-size: 72px;
@@ -91,7 +82,7 @@
 </head>
 <body>
 
-<!-- SEZIONE NOME CON TITOLO -->
+<!-- SEZIONE NOME -->
 <div id="nameInput">
   <h1 id="gameTitle">MULTY</h1>
   <input id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off" />
@@ -99,10 +90,8 @@
   <button id="startBtn">Entra nel gioco</button>
 </div>
 
-<!-- CANVAS DI GIOCO -->
 <canvas id="game" width="600" height="400"></canvas>
 
-<!-- PULSANTI MOBILE -->
 <div id="ui">
   <button data-key="ArrowLeft">◀</button>
   <button data-key="ArrowUp">▲</button>
@@ -110,13 +99,10 @@
   <button data-key="ArrowRight">▶</button>
 </div>
 
-<!-- BOTTONE RESPAWN -->
 <button id="respawnBtn">RESPAWNA</button>
 
-<!-- PUBNUB SDK + Tuo script -->
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
-  // Qui incolla tutto il tuo script del gioco
 const pubnub = new PubNub({
   publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
   subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
@@ -135,27 +121,22 @@ let lastShotTime  = 0;
 let processedKill = {};
 let gameStartedAt = 0;
 let gameEnded     = false;
-const GAME_DURATION = 60 * 1000; // 1 minuto
-let endPhase      = 0; // 0=gioco,1=FINE,2=vincitore
+const GAME_DURATION = 60 * 1000;
+let endPhase      = 0;
 
 const respawnBtn = document.getElementById("respawnBtn");
 const startBtn   = document.getElementById("startBtn");
-
-// tiene traccia degli interval di hold
 const holdIntervals = {};
 
-// --- Power-ups ---
 function spawnPowerups() {
-  const list = [
-    { id:'bad-0',  type:'bad' , x:Math.random()*580, y:Math.random()*380 },
-    { id:'bad-1',  type:'bad' , x:Math.random()*580, y:Math.random()*380 },
-    { id:'good-0', type:'good', x:Math.random()*580, y:Math.random()*380 },
-    { id:'good-1', type:'good', x:Math.random()*580, y:Math.random()*380 }
-  ];
-  pubnub.publish({ channel, message:{ type:'powerups', powerups:list } });
+  powerups = [];
+  powerups.push({ id: 'good-0', type: 'good', x: Math.random()*580, y: Math.random()*380 });
+  powerups.push({ id: 'good-1', type: 'good', x: Math.random()*580, y: Math.random()*380 });
+  powerups.push({ id: 'bad-0',  type: 'bad',  x: Math.random()*580, y: Math.random()*380 });
+  powerups.push({ id: 'bad-1',  type: 'bad',  x: Math.random()*580, y: Math.random()*380 });
+  pubnub.publish({ channel, message: { type: 'powerups', powerups } });
 }
 
-// --- Inizio partita ---
 function startGame() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) return alert("Inserisci un nome!");
@@ -173,7 +154,6 @@ function startGame() {
   endPhase = 0;
   processedKill = {};
   bullets = [];
-  powerups = [];
   spawnPowerups();
   sendState();
   sendBullets();
@@ -181,7 +161,6 @@ function startGame() {
 }
 startBtn.addEventListener('click', startGame);
 
-// --- PubNub listener ---
 pubnub.addListener({ message:({message})=>{
   switch(message.type){
     case 'state':
@@ -200,10 +179,11 @@ pubnub.addListener({ message:({message})=>{
           players[myID].lives = Math.max(0, players[myID].lives - 2);
           if(players[myID].lives===0) die();
         } else {
-          players[myID].lives++;
+          players[myID].lives = Math.min(5, players[myID].lives + 1);
         }
         sendState();
       }
+      // Respawn powerup dopo 30s
       setTimeout(()=>{
         const pu = {
           id: message.id,
@@ -246,7 +226,6 @@ pubnub.addListener({ message:({message})=>{
 }});
 pubnub.subscribe({ channels:[channel] });
 
-// --- Movimento e hold-to-move ---
 function move(key){
   if(isDead||!players[myID]||gameEnded) return;
   const D = {
@@ -263,44 +242,25 @@ function move(key){
   }
 }
 
-// start hold
 function startHold(key){
   if(holdIntervals[key]) return;
   move(key);
   holdIntervals[key] = setInterval(()=>move(key), 100);
 }
-// stop hold
 function stopHold(key){
   clearInterval(holdIntervals[key]);
   delete holdIntervals[key];
 }
 
-// setup dei pulsanti mobile
 document.querySelectorAll('#ui button').forEach(btn=>{
   const key = btn.dataset.key;
-  // touch events
-  btn.addEventListener('touchstart', e=>{
-    e.preventDefault();
-    startHold(key);
-  });
-  btn.addEventListener('touchend', e=>{
-    e.preventDefault();
-    stopHold(key);
-  });
-  // mouse events per desktop
-  btn.addEventListener('mousedown', e=>{
-    e.preventDefault();
-    startHold(key);
-  });
-  btn.addEventListener('mouseup', e=>{
-    e.preventDefault();
-    stopHold(key);
-  });
-  // cancel selection
+  btn.addEventListener('touchstart', e=>{ e.preventDefault(); startHold(key); });
+  btn.addEventListener('touchend', e=>{ e.preventDefault(); stopHold(key); });
+  btn.addEventListener('mousedown', e=>{ e.preventDefault(); startHold(key); });
+  btn.addEventListener('mouseup', e=>{ e.preventDefault(); stopHold(key); });
   btn.addEventListener('selectstart', e=>e.preventDefault());
 });
 
-// --- Sparo ---
 canvas.addEventListener('click', e=>{
   if(isDead||!players[myID]||gameEnded) return;
   const now = Date.now();
@@ -313,7 +273,6 @@ canvas.addEventListener('click', e=>{
   sendBullets();
 });
 
-// --- Pubblica ---
 function sendState(){
   pubnub.publish({ channel, message:{ type:'state', uuid:myID, data:players[myID] } });
 }
@@ -321,7 +280,6 @@ function sendBullets(){
   pubnub.publish({ channel, message:{ type:'bullets', bullets } });
 }
 
-// --- Morte e respawn ---
 function die(){
   isDead = true;
   respawnBtn.style.display = 'block';
@@ -336,7 +294,6 @@ function respawn(){
   sendState();
 }
 
-// --- Restart ---
 function restartGame(){
   gameStartedAt = Date.now();
   gameEnded = false;
@@ -354,7 +311,6 @@ function restartGame(){
   requestAnimationFrame(draw);
 }
 
-// --- Draw & timer & collisioni & morte & fine ---
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   const now = Date.now(), elapsed = now-gameStartedAt;
@@ -365,7 +321,6 @@ function draw(){
     ctx.fillText('⏱ '+Math.floor(tl/1000)+'s',canvas.width/2-30,25);
   }
 
-  // collisione power-up
   if(endPhase===0 && players[myID]){
     const me=players[myID];
     for(let pu of powerups){
@@ -378,39 +333,40 @@ function draw(){
     }
   }
 
-  // disegna powerup
   powerups.forEach(pu=>{
-    ctx.fillStyle='yellow'; ctx.fillRect(pu.x,pu.y,20,20);
-    ctx.fillStyle='black'; ctx.font='16px sans-serif';
+    ctx.fillStyle='yellow';
+    ctx.fillRect(pu.x,pu.y,20,20);
+    ctx.fillStyle='black';
+    ctx.font='16px sans-serif';
     ctx.fillText('?',pu.x+6,pu.y+14);
   });
 
-  // disegna players
   if(players[myID]){
-    let hearts=''; for(let i=0;i<players[myID].lives;i++)hearts+='❤️';
-    ctx.fillStyle='white'; ctx.font='20px sans-serif';
+    let hearts=''; 
+    for(let i=0; i<players[myID].lives; i++) hearts+='❤️';
+    ctx.fillStyle='white'; 
+    ctx.font='20px sans-serif';
     ctx.fillText(hearts+'  Kill:'+players[myID].kills,10,25);
   }
   for(let id in players){
-    if(id===myID&&isDead) continue;
+    if(id===myID && isDead) continue;
     const p=players[id];
     ctx.fillStyle=p.color; ctx.fillRect(p.x,p.y,20,20);
     ctx.fillStyle='white'; ctx.font='12px sans-serif';
     ctx.fillText(p.name,p.x,p.y-5);
   }
 
-  // proiettili
   if(endPhase===0){
     bullets=bullets.filter(b=>now-b.start<3000);
     bullets.forEach((b,i)=>{
-      const sp=5,dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);
+      const sp=5, dx=b.tx-b.x, dy=b.ty-b.y, d=Math.hypot(dx,dy);
       if(d>0){b.x+=dx/d*sp; b.y+=dy/d*sp;}
       ctx.fillStyle='yellow'; ctx.beginPath();
       ctx.arc(b.x,b.y,5,0,2*Math.PI); ctx.fill();
       for(let id in players){
-        if(id===b.owner)continue;
+        if(id===b.owner) continue;
         const P=players[id];
-        if(b.x>P.x&&b.x<P.x+20&&b.y>P.y&&b.y<P.y+20){
+        if(b.x>P.x && b.x<P.x+20 && b.y>P.y && b.y<P.y+20){
           pubnub.publish({ channel, message:{ type:'hit', target:id, owner:b.owner } });
           bullets.splice(i,1); sendBullets(); break;
         }
@@ -418,12 +374,10 @@ function draw(){
     });
   }
 
-  // classifica
   const sorted=Object.values(players).sort((a,b)=>b.kills-a.kills);
   ctx.fillStyle='white'; ctx.font='16px sans-serif';
-  sorted.forEach((p,i)=>ctx.fillText(${p.name}: ${p.kills},canvas.width-150,25+i*20));
+  sorted.forEach((p,i)=>ctx.fillText(`${p.name}: ${p.kills}`,canvas.width-150,25+i*20));
 
-  // fine partita
   if(!gameEnded && elapsed>=GAME_DURATION){
     gameEnded=true; endPhase=1;
     setTimeout(()=> endPhase=2,2000);
@@ -435,10 +389,9 @@ function draw(){
   } else if(endPhase===2){
     const w=sorted[0]||{name:'Nessuno',kills:0};
     ctx.fillStyle='yellow';ctx.font='36px sans-serif';
-    ctx.fillText(Vincitore: ${w.name} (${w.kills}),canvas.width/2-200,canvas.height/2);
+    ctx.fillText(`Vincitore: ${w.name} (${w.kills})`,canvas.width/2-200,canvas.height/2);
   }
 
-  // messaggio morte se isDead
   if(isDead){
     ctx.fillStyle='red'; ctx.font='40px sans-serif';
     ctx.fillText('SEI MORTO', canvas.width/2 - 80, canvas.height/2);
@@ -447,9 +400,24 @@ function draw(){
   requestAnimationFrame(draw);
 }
 
-// leave
+respawnBtn.addEventListener('click', respawn);
+
 window.addEventListener('beforeunload',()=>{
   pubnub.publish({ channel, message:{ type:'leave', uuid:myID } });
+});
+
+// Movimento da tastiera
+window.addEventListener('keydown', e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+    e.preventDefault();
+    startHold(e.key);
+  }
+});
+window.addEventListener('keyup', e=>{
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+    e.preventDefault();
+    stopHold(e.key);
+  }
 });
 </script>
 </body>
