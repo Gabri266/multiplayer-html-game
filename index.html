@@ -82,6 +82,14 @@
 </head>
 <body>
 
+<!-- AUDIO PRECARICATI -->
+<audio id="sfx-shoot" src="https://cdn.pixabay.com/audio/2024/08/19/audio_8313075fdb.mp3"></audio>
+<audio id="sfx-hit" src="https://cdn.pixabay.com/audio/2025/07/03/audio_2538f74382.mp3"></audio>
+<audio id="sfx-up" src="https://cdn.pixabay.com/audio/2023/09/20/audio_78f082c2dc.mp3"></audio>
+<audio id="sfx-down" src="https://cdn.pixabay.com/audio/2022/03/04/audio_d47090aeab.mp3"></audio>
+<audio id="sfx-win" src="https://cdn.pixabay.com/audio/2023/04/13/audio_f4865f179c.mp3"></audio>
+<audio id="bg-music" src="https://cdn.pixabay.com/audio/2023/01/30/audio_5d1911c47a.mp3" loop></audio>
+
 <!-- SEZIONE NOME -->
 <div id="nameInput">
   <h1 id="gameTitle">MULTY</h1>
@@ -103,6 +111,7 @@
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
+
 const pubnub = new PubNub({
   publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
   subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
@@ -121,12 +130,26 @@ let lastShotTime  = 0;
 let processedKill = {};
 let gameStartedAt = 0;
 let gameEnded     = false;
-const GAME_DURATION = 240 * 1000;
+const GAME_DURATION = 10 * 1000;
 let endPhase      = 0;
 
 const respawnBtn = document.getElementById("respawnBtn");
 const startBtn   = document.getElementById("startBtn");
+const nameField = document.getElementById("playerName");
+nameField.addEventListener('click', () => {
+  play('bg-music');
+});
 const holdIntervals = {};
+
+function play(id){
+  const audio = document.getElementById(id);
+  if(audio){
+    audio.currentTime = 0;
+    audio.play();
+  }
+}
+// appena la pagina è pronta, fai partire la musica di lobby
+
 
 function spawnPowerups() {
   powerups = [];
@@ -154,9 +177,17 @@ function startGame() {
   isDead = false;
   processedKill = {};
 
+  // Suona musica iniziale SOLO per il giocatore che entra nella lobby
+
+
   // Controlla se la partita è già partita, se no la avvia
   pubnub.history({ channel, count: 100 }, (status, res) => {
     const startedMsg = res.messages.find(m => m.entry.type === "startGame");
+	const bgMusic = document.getElementById('bg-music');
+	if(bgMusic && !bgMusic.paused){
+		bgMusic.pause();
+		bgMusic.currentTime = 0;
+	}
     if (!startedMsg) {
       // Primo giocatore: avvia il gioco e manda timestamp a tutti
       pubnub.publish({ channel, message: { type: "startGame", timestamp: Date.now() } });
@@ -200,9 +231,13 @@ pubnub.addListener({ message: ({message}) => {
       if(message.picker === myID){
         if(message.puType === 'bad'){
           players[myID].lives = Math.max(0, players[myID].lives - 2);
+          // Suono solo per chi prende il powerup negativo
+          pubnub.publish({ channel, message: { type: 'sfx', sound: 'down', target: myID } });
           if(players[myID].lives === 0) die();
         } else {
           players[myID].lives = Math.min(5, players[myID].lives + 1);
+          // Suono solo per chi prende powerup positivo
+          pubnub.publish({ channel, message: { type: 'sfx', sound: 'up', target: myID } });
         }
         sendState();
       }
@@ -224,6 +259,8 @@ pubnub.addListener({ message: ({message}) => {
       let {target, owner} = message;
       if(players[target]){
         players[target].lives--;
+        // Suono solo per il giocatore colpito
+        pubnub.publish({ channel, message: { type: 'sfx', sound: 'hit', target: target } });
         if(players[target].lives === 0){
           const key = owner + '→' + target;
           if(!processedKill[key]){
@@ -260,9 +297,27 @@ pubnub.addListener({ message: ({message}) => {
       }
       isDead = false;
       respawnBtn.style.display = 'none';
+      // Ferma musica appena parte il gioco per tutti
+      const bgMusic = document.getElementById('bg-music');
+      if(bgMusic && !bgMusic.paused){
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+      }
+      break;
+    case 'sfx':
+      // Suoni diversi dallo sparo: solo il target li sente
+      if(message.sound === 'shoot'){
+        // Spari sentiti da tutti
+        play('sfx-shoot');
+      } else {
+        if(message.target === myID){
+          play('sfx-' + message.sound);
+        }
+      }
       break;
   }
 }});
+
 pubnub.subscribe({ channels: [channel] });
 
 function move(key){
@@ -303,13 +358,16 @@ document.querySelectorAll('#ui button').forEach(btn => {
 canvas.addEventListener('click', e => {
   if(isDead || !players[myID] || gameEnded) return;
   const now = Date.now();
-  if(now - lastShotTime < 1000) return;
+  if(now - lastShotTime < 1000) return; // cooldown 1 secondo tra spari
   lastShotTime = now;
   const r = canvas.getBoundingClientRect();
   const tx = e.clientX - r.left, ty = e.clientY - r.top;
   const me = players[myID];
   bullets.push({ id: myID + '-' + now, x: me.x + 10, y: me.y + 10, tx, ty, owner: myID, start: now });
   sendBullets();
+  // Suona sparo e manda a tutti
+  play('sfx-shoot');
+  pubnub.publish({ channel, message: { type: 'sfx', sound: 'shoot' } });
 });
 
 function sendState(){
@@ -405,7 +463,8 @@ function draw(){
   if(endPhase === 0){
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
-      const sp = 2, dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+      const sp = 2; // VELOCITÀ PROIETTILI dimezzata rispetto a prima (prima 4)
+      const dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
       if(d > 0){ b.x += dx/d*sp; b.y += dy/d*sp; }
       ctx.fillStyle = 'yellow'; 
       ctx.beginPath();
@@ -434,8 +493,11 @@ function draw(){
     endPhase = 1;
     setTimeout(() => endPhase = 2, 2000);
     setTimeout(restartGame, 7000);
+    // Suono vittoria per tutti
+    pubnub.publish({ channel, message: { type: 'sfx', sound: 'win' } });
   }
   if(endPhase === 1){
+    play('sfx-win'); // suono vittoria qui
     ctx.fillStyle = 'red'; 
     ctx.font = '48px sans-serif';
     ctx.fillText('FINE PARTITA', canvas.width/2 - 140, canvas.height/2);
