@@ -4,50 +4,119 @@
   <meta charset="utf-8" />
   <title>Multiplayer Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- FONT MONOTON -->
+  <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
+
   <style>
-    body { margin:0; padding:0; background:#000; color:#fff; font-family:sans-serif; touch-action:none; }
-    canvas { display:block; margin:20px auto 0; background:#222; border:2px solid #fff; }
-    #ui { display:flex; justify-content:center; gap:10px; margin-top:10px; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      touch-action: none;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto 0;
+      background: #222;
+      border: 2px solid #fff;
+    }
+    #ui {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-top: 10px;
+      user-select: none;
+      -webkit-user-select: none;
+    }
     button {
-      padding:15px 20px; font-size:18px; background:#444; color:#fff;
-      border:none; border-radius:8px; cursor:pointer;
+      padding: 15px 20px;
+      font-size: 18px;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     }
     #respawnBtn {
-      display:none; position:absolute; top:55%; left:50%;
-      transform:translate(-50%,-50%); background:red; font-size:24px;
-      padding:15px 30px; border-radius:10px; z-index:10;
+      display: none;
+      position: absolute;
+      top: 55%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: red;
+      font-size: 24px;
+      padding: 15px 30px;
+      border-radius: 10px;
+      z-index: 10;
+      user-select: none;
+      -webkit-user-select: none;
     }
     #nameInput {
-      position:absolute; top:40%; left:50%;
-      transform:translate(-50%,-50%); text-align:center; z-index:10;
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
     }
     #nameInput input {
-      font-size:24px; padding:10px; width:200px; border-radius:8px;
+      font-size: 24px;
+      padding: 10px;
+      width: 220px;
+      border-radius: 8px;
+      border: none;
     }
-    #nameInput button { margin-top:10px; font-size:20px; }
+    #nameInput button {
+      margin-top: 10px;
+      font-size: 20px;
+    }
+
+    /* TITOLO MULTY */
+    #gameTitle {
+      font-family: 'Monoton', cursive;
+      font-size: 72px;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 30px;
+      letter-spacing: 4px;
+      text-shadow: 3px 3px 10px #ffffff40;
+    }
   </style>
 </head>
 <body>
 
+<!-- SEZIONE NOME CON TITOLO -->
 <div id="nameInput">
+  <h1 id="gameTitle">MULTY</h1>
   <input id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off" />
   <br/>
-  <button onclick="startGame()">Entra nel gioco</button>
+  <button id="startBtn">Entra nel gioco</button>
 </div>
 
+<!-- CANVAS DI GIOCO -->
 <canvas id="game" width="600" height="400"></canvas>
 
+<!-- PULSANTI MOBILE -->
 <div id="ui">
-  <button onclick="move('ArrowLeft')">◀</button>
-  <button onclick="move('ArrowUp')">▲</button>
-  <button onclick="move('ArrowDown')">▼</button>
-  <button onclick="move('ArrowRight')">▶</button>
+  <button data-key="ArrowLeft">◀</button>
+  <button data-key="ArrowUp">▲</button>
+  <button data-key="ArrowDown">▼</button>
+  <button data-key="ArrowRight">▶</button>
 </div>
 
-<button id="respawnBtn" onclick="respawn()">RESPAWNA</button>
+<!-- BOTTONE RESPAWN -->
+<button id="respawnBtn">RESPAWNA</button>
 
+<!-- PUBNUB SDK + Tuo script -->
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
+  // Qui incolla tutto il tuo script del gioco
 const pubnub = new PubNub({
   publishKey:   'pub-c-586ffd5d-1b7f-4c3a-a826-033aa2ce3b21',
   subscribeKey: 'sub-c-7deb358a-4a16-4868-9a20-fbeec203708b',
@@ -58,59 +127,193 @@ const canvas = document.getElementById('game');
 const ctx    = canvas.getContext('2d');
 const myID   = pubnub.getUUID();
 
-let players      = {};
-let bullets      = [];
-let isDead       = false;
-let lastShotTime = 0;
-let processedKill = {}; // per evitare doppie kill
-const respawnBtn = document.getElementById("respawnBtn");
+let players       = {};
+let bullets       = [];
+let powerups      = [];
+let isDead        = false;
+let lastShotTime  = 0;
+let processedKill = {};
+let gameStartedAt = 0;
+let gameEnded     = false;
+const GAME_DURATION = 60 * 1000; // 1 minuto
+let endPhase      = 0; // 0=gioco,1=FINE,2=vincitore
 
-// 1) Avvio del gioco
+const respawnBtn = document.getElementById("respawnBtn");
+const startBtn   = document.getElementById("startBtn");
+
+// tiene traccia degli interval di hold
+const holdIntervals = {};
+
+// --- Power-ups ---
+function spawnPowerups() {
+  const list = [
+    { id:'bad-0',  type:'bad' , x:Math.random()*580, y:Math.random()*380 },
+    { id:'bad-1',  type:'bad' , x:Math.random()*580, y:Math.random()*380 },
+    { id:'good-0', type:'good', x:Math.random()*580, y:Math.random()*380 },
+    { id:'good-1', type:'good', x:Math.random()*580, y:Math.random()*380 }
+  ];
+  pubnub.publish({ channel, message:{ type:'powerups', powerups:list } });
+}
+
+// --- Inizio partita ---
 function startGame() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) return alert("Inserisci un nome!");
   players[myID] = {
     name,
-    x: Math.random()*580, y: Math.random()*380,
+    x: Math.random()*580,
+    y: Math.random()*380,
     color: '#'+Math.floor(Math.random()*16777215).toString(16),
-    kills:0, lives:3
+    kills:0,
+    lives:3
   };
-  document.getElementById("nameInput").style.display = "none";
+  document.getElementById("nameInput").style.display = 'none';
+  gameStartedAt = Date.now();
+  gameEnded = false;
+  endPhase = 0;
+  processedKill = {};
+  bullets = [];
+  powerups = [];
+  spawnPowerups();
   sendState();
-  draw();
+  sendBullets();
+  requestAnimationFrame(draw);
 }
+startBtn.addEventListener('click', startGame);
 
-// 2) Movimento (limiti 600×400)
+// --- PubNub listener ---
+pubnub.addListener({ message:({message})=>{
+  switch(message.type){
+    case 'state':
+      players[message.uuid] = { ...players[message.uuid], ...message.data };
+      break;
+    case 'bullets':
+      bullets = message.bullets;
+      break;
+    case 'powerups':
+      powerups = message.powerups;
+      break;
+    case 'powerupPicked':
+      powerups = powerups.filter(p=>p.id!==message.id);
+      if(message.picker===myID){
+        if(message.puType==='bad'){
+          players[myID].lives = Math.max(0, players[myID].lives - 2);
+          if(players[myID].lives===0) die();
+        } else {
+          players[myID].lives++;
+        }
+        sendState();
+      }
+      setTimeout(()=>{
+        const pu = {
+          id: message.id,
+          type: message.puType,
+          x: Math.random()*580,
+          y: Math.random()*380
+        };
+        pubnub.publish({ channel, message:{ type:'powerupRespawn', powerup:pu } });
+      }, 30000);
+      break;
+    case 'powerupRespawn':
+      powerups.push(message.powerup);
+      break;
+    case 'hit':
+      if(gameEnded) return;
+      let {target,owner} = message;
+      if(players[target]){
+        players[target].lives--;
+        if(players[target].lives===0){
+          const key = owner+'→'+target;
+          if(!processedKill[key]){
+            pubnub.publish({ channel, message:{ type:'kill', uuid:owner } });
+            processedKill[key]=true;
+          }
+          if(target===myID) die();
+        }
+        sendState();
+      }
+      break;
+    case 'kill':
+      if(message.uuid===myID){
+        players[myID].kills++;
+        sendState();
+      }
+      break;
+    case 'leave':
+      delete players[message.uuid];
+      break;
+  }
+}});
+pubnub.subscribe({ channels:[channel] });
+
+// --- Movimento e hold-to-move ---
 function move(key){
-  if(isDead||!players[myID]) return;
+  if(isDead||!players[myID]||gameEnded) return;
   const D = {
-    ArrowLeft: {dx:-5,dy:0}, ArrowRight: {dx:5,dy:0},
-    ArrowUp:   {dx:0,dy:-5}, ArrowDown:{dx:0,dy:5}
+    ArrowLeft:  {dx:-5, dy:0},
+    ArrowRight: {dx: 5, dy:0},
+    ArrowUp:    {dx: 0, dy:-5},
+    ArrowDown:  {dx: 0, dy: 5}
   }[key];
-  if (D) {
+  if(D){
     let me = players[myID];
     me.x = Math.max(0, Math.min(580, me.x + D.dx));
     me.y = Math.max(0, Math.min(380, me.y + D.dy));
     sendState();
   }
 }
-document.addEventListener('keydown', e=>move(e.key));
-window.move = move;
 
-// 3) Sparo con cooldown 1s
-canvas.addEventListener('click', e => {
-  if(isDead||!players[myID]) return;
+// start hold
+function startHold(key){
+  if(holdIntervals[key]) return;
+  move(key);
+  holdIntervals[key] = setInterval(()=>move(key), 100);
+}
+// stop hold
+function stopHold(key){
+  clearInterval(holdIntervals[key]);
+  delete holdIntervals[key];
+}
+
+// setup dei pulsanti mobile
+document.querySelectorAll('#ui button').forEach(btn=>{
+  const key = btn.dataset.key;
+  // touch events
+  btn.addEventListener('touchstart', e=>{
+    e.preventDefault();
+    startHold(key);
+  });
+  btn.addEventListener('touchend', e=>{
+    e.preventDefault();
+    stopHold(key);
+  });
+  // mouse events per desktop
+  btn.addEventListener('mousedown', e=>{
+    e.preventDefault();
+    startHold(key);
+  });
+  btn.addEventListener('mouseup', e=>{
+    e.preventDefault();
+    stopHold(key);
+  });
+  // cancel selection
+  btn.addEventListener('selectstart', e=>e.preventDefault());
+});
+
+// --- Sparo ---
+canvas.addEventListener('click', e=>{
+  if(isDead||!players[myID]||gameEnded) return;
   const now = Date.now();
   if(now - lastShotTime < 1000) return;
   lastShotTime = now;
   const r = canvas.getBoundingClientRect();
   const tx = e.clientX - r.left, ty = e.clientY - r.top;
   const me = players[myID];
-  bullets.push({ id:myID+"-"+now, x:me.x+10, y:me.y+10, tx, ty, owner:myID, start:now });
+  bullets.push({ id:myID+'-'+now, x:me.x+10, y:me.y+10, tx, ty, owner:myID, start:now });
   sendBullets();
 });
 
-// 4) Pubblica stato e proiettili
+// --- Pubblica ---
 function sendState(){
   pubnub.publish({ channel, message:{ type:'state', uuid:myID, data:players[myID] } });
 }
@@ -118,41 +321,7 @@ function sendBullets(){
   pubnub.publish({ channel, message:{ type:'bullets', bullets } });
 }
 
-// 5) Ricezione messaggi
-pubnub.addListener({ message: ({message}) => {
-  if(message.type==='state') {
-    players[message.uuid] = { ...players[message.uuid], ...message.data };
-  } else if(message.type==='bullets') {
-    bullets = message.bullets;
-  } else if(message.type==='hit') {
-    const tgt = message.target, own = message.owner;
-    if(!players[tgt]) return;
-    players[tgt].lives--;
-    // se il target è stato ucciso da questo hit
-    if(players[tgt].lives === 0) {
-      // spawn kill una sola volta per owner→target
-      const key = own + "→" + tgt;
-      if(!processedKill[key]) {
-        pubnub.publish({ channel, message:{ type:'kill', uuid:own } });
-        processedKill[key] = true;
-      }
-      // se sono io a morire
-      if(tgt === myID) die();
-    }
-    // aggiorna stato
-    sendState();
-  } else if(message.type==='kill') {
-    if(message.uuid === myID) {
-      players[myID].kills++;
-      sendState();
-    }
-  } else if(message.type==='leave') {
-    delete players[message.uuid];
-  }
-}});
-pubnub.subscribe({ channels:[channel] });
-
-// 6) Morte e respawn manuale
+// --- Morte e respawn ---
 function die(){
   isDead = true;
   respawnBtn.style.display = 'block';
@@ -162,72 +331,124 @@ function respawn(){
   players[myID].x = Math.random()*580;
   players[myID].y = Math.random()*380;
   isDead = false;
-  // reset kill-processing per rinascita
   processedKill = {};
   respawnBtn.style.display = 'none';
   sendState();
 }
 
-// 7) Loop di rendering
+// --- Restart ---
+function restartGame(){
+  gameStartedAt = Date.now();
+  gameEnded = false;
+  endPhase = 0;
+  bullets=[]; processedKill={}; powerups=[];
+  spawnPowerups();
+  for(let id in players){
+    players[id].kills=0;
+    players[id].lives=3;
+    players[id].x=Math.random()*580;
+    players[id].y=Math.random()*380;
+  }
+  sendState(); sendBullets();
+  isDead=false; respawnBtn.style.display='none';
+  requestAnimationFrame(draw);
+}
+
+// --- Draw & timer & collisioni & morte & fine ---
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
+  const now = Date.now(), elapsed = now-gameStartedAt;
+  const tl = Math.max(0, GAME_DURATION - elapsed);
 
-  // 7a) Cuori + kill in alto a sinistra
-  if(players[myID]) {
-    let hearts = '';
-    for(let i=0;i<3;i++) hearts += i<players[myID].lives ? '❤️' : '🖤';
-    ctx.fillStyle='white'; ctx.font='20px sans-serif';
-    ctx.fillText(hearts + '  Kill: ' + players[myID].kills, 10, 25);
+  if(endPhase===0){
+    ctx.fillStyle='white'; ctx.font='20px monospace';
+    ctx.fillText('⏱ '+Math.floor(tl/1000)+'s',canvas.width/2-30,25);
   }
 
-  // 7b) Disegna players
-  for(let id in players) {
-    if(id===myID && isDead) continue;
-    const p = players[id];
-    ctx.fillStyle = p.color;
-    ctx.fillRect(p.x, p.y, 20, 20);
-    ctx.fillStyle='white'; ctx.font='12px sans-serif';
-    ctx.fillText(p.name, p.x, p.y-5);
-  }
-
-  // 7c) Muovi e disegna proiettili
-  const now = Date.now();
-  bullets = bullets.filter(b => now - b.start < 3000);
-  bullets.forEach((b,i) => {
-    const speed=5, dx=b.tx-b.x, dy=b.ty-b.y, d=Math.hypot(dx,dy);
-    if(d>0){ b.x += dx/d*speed; b.y += dy/d*speed; }
-    ctx.fillStyle='yellow'; ctx.beginPath();
-    ctx.arc(b.x,b.y,5,0,2*Math.PI); ctx.fill();
-    // collisione
-    for(let id in players) {
-      if(id===b.owner||players[id].lives<=0) continue;
-      const p=players[id];
-      if(b.x>p.x&&b.x<p.x+20&&b.y>p.y&&b.y<p.y+20){
-        pubnub.publish({ channel, message:{ type:'hit', target:id, owner:b.owner } });
-        bullets.splice(i,1);
-        sendBullets();
+  // collisione power-up
+  if(endPhase===0 && players[myID]){
+    const me=players[myID];
+    for(let pu of powerups){
+      if(me.x<pu.x+20 && me.x+20>pu.x && me.y<pu.y+20 && me.y+20>pu.y){
+        pubnub.publish({ channel, message:{
+          type:'powerupPicked', id:pu.id, puType:pu.type, picker:myID
+        }});
         break;
       }
     }
+  }
+
+  // disegna powerup
+  powerups.forEach(pu=>{
+    ctx.fillStyle='yellow'; ctx.fillRect(pu.x,pu.y,20,20);
+    ctx.fillStyle='black'; ctx.font='16px sans-serif';
+    ctx.fillText('?',pu.x+6,pu.y+14);
   });
 
-  // 7d) Classifica globale in alto a destra
-  const sorted = Object.values(players)
-                       .sort((a,b)=>b.kills - a.kills);
-  ctx.fillStyle='white'; ctx.font='16px sans-serif';
-  sorted.forEach((p,i)=>ctx.fillText(`${p.name}: ${p.kills}`, canvas.width-150, 25+i*20));
+  // disegna players
+  if(players[myID]){
+    let hearts=''; for(let i=0;i<players[myID].lives;i++)hearts+='❤️';
+    ctx.fillStyle='white'; ctx.font='20px sans-serif';
+    ctx.fillText(hearts+'  Kill:'+players[myID].kills,10,25);
+  }
+  for(let id in players){
+    if(id===myID&&isDead) continue;
+    const p=players[id];
+    ctx.fillStyle=p.color; ctx.fillRect(p.x,p.y,20,20);
+    ctx.fillStyle='white'; ctx.font='12px sans-serif';
+    ctx.fillText(p.name,p.x,p.y-5);
+  }
 
-  // 7e) Messaggio "SEI MORTO"
-  if(isDead) {
+  // proiettili
+  if(endPhase===0){
+    bullets=bullets.filter(b=>now-b.start<3000);
+    bullets.forEach((b,i)=>{
+      const sp=5,dx=b.tx-b.x,dy=b.ty-b.y,d=Math.hypot(dx,dy);
+      if(d>0){b.x+=dx/d*sp; b.y+=dy/d*sp;}
+      ctx.fillStyle='yellow'; ctx.beginPath();
+      ctx.arc(b.x,b.y,5,0,2*Math.PI); ctx.fill();
+      for(let id in players){
+        if(id===b.owner)continue;
+        const P=players[id];
+        if(b.x>P.x&&b.x<P.x+20&&b.y>P.y&&b.y<P.y+20){
+          pubnub.publish({ channel, message:{ type:'hit', target:id, owner:b.owner } });
+          bullets.splice(i,1); sendBullets(); break;
+        }
+      }
+    });
+  }
+
+  // classifica
+  const sorted=Object.values(players).sort((a,b)=>b.kills-a.kills);
+  ctx.fillStyle='white'; ctx.font='16px sans-serif';
+  sorted.forEach((p,i)=>ctx.fillText(${p.name}: ${p.kills},canvas.width-150,25+i*20));
+
+  // fine partita
+  if(!gameEnded && elapsed>=GAME_DURATION){
+    gameEnded=true; endPhase=1;
+    setTimeout(()=> endPhase=2,2000);
+    setTimeout(restartGame,7000);
+  }
+  if(endPhase===1){
+    ctx.fillStyle='red'; ctx.font='48px sans-serif';
+    ctx.fillText('FINE PARTITA',canvas.width/2-140,canvas.height/2);
+  } else if(endPhase===2){
+    const w=sorted[0]||{name:'Nessuno',kills:0};
+    ctx.fillStyle='yellow';ctx.font='36px sans-serif';
+    ctx.fillText(Vincitore: ${w.name} (${w.kills}),canvas.width/2-200,canvas.height/2);
+  }
+
+  // messaggio morte se isDead
+  if(isDead){
     ctx.fillStyle='red'; ctx.font='40px sans-serif';
-    ctx.fillText('SEI MORTO', canvas.width/2-120, canvas.height/2);
+    ctx.fillText('SEI MORTO', canvas.width/2 - 80, canvas.height/2);
   }
 
   requestAnimationFrame(draw);
 }
 
-// 8) Notifica uscita
-window.addEventListener('beforeunload', ()=>{
+// leave
+window.addEventListener('beforeunload',()=>{
   pubnub.publish({ channel, message:{ type:'leave', uuid:myID } });
 });
 </script>
