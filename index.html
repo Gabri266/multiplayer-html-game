@@ -405,7 +405,7 @@ function draw(){
   if(endPhase === 0){
     bullets = bullets.filter(b => now - b.start < 3000);
     bullets.forEach((b, i) => {
-      const sp = 5, dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
+      const sp = 2, dx = b.tx - b.x, dy = b.ty - b.y, d = Math.hypot(dx, dy);
       if(d > 0){ b.x += dx/d*sp; b.y += dy/d*sp; }
       ctx.fillStyle = 'yellow'; 
       ctx.beginPath();
