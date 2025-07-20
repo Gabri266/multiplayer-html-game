@@ -6,124 +6,121 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #000;
-      color: #fff;
-      font-family: sans-serif;
-      touch-action: none;
-      overflow: hidden;
-      height: 100%;
-    }
+	html, body {
+	  margin: 0;
+	  padding: 0;
+	  background: #000;
+	  color: #fff;
+	  font-family: sans-serif;
+	  touch-action: none;
+	  overflow: hidden;
+	  height: 100%;
+	}
 
-    canvas {
-      display: block;
-      background: #222;
-      border: 2px solid #fff;
-      margin: 0 auto;
-    }
+	canvas {
+	  display: block;
+	  margin: 20px auto 0;
+	  background: #222;
+	  border: 2px solid #fff;
+	}
 
-    #ui {
-      display: none;
-      position: absolute;
-      top: 10px;
-      width: 100%;
-      justify-content: space-between;
-      padding: 0 30px;
-      z-index: 10;
-    }
+	#ui {
+	  display: flex;
+	  justify-content: center;
+	  gap: 10px;
+	  margin-top: 10px;
+	  user-select: none;
+	  -webkit-user-select: none;
+	}
 
-    button {
-      padding: 15px 20px;
-      font-size: 18px;
-      background: #444;
-      color: #fff;
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      user-select: none;
-    }
+	button {
+	  padding: 15px 20px;
+	  font-size: 18px;
+	  background: #444;
+	  color: #fff;
+	  border: none;
+	  border-radius: 8px;
+	  cursor: pointer;
+	}
 
-    #respawnBtn {
-      display: none;
-      position: absolute;
-      top: 55%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: red;
-      font-size: 24px;
-      padding: 15px 30px;
-      border-radius: 10px;
-      z-index: 10;
-    }
+	#respawnBtn {
+	  display: none;
+	  position: absolute;
+	  top: 55%;
+	  left: 50%;
+	  transform: translate(-50%, -50%);
+	  background: red;
+	  font-size: 24px;
+	  padding: 15px 30px;
+	  border-radius: 10px;
+	  z-index: 10;
+	}
 
-    #nameInput {
-      position: absolute;
-      top: 30%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      z-index: 10;
-    }
+	#nameInput {
+	  position: absolute;
+	  top: 30%;
+	  left: 50%;
+	  transform: translate(-50%, -50%);
+	  text-align: center;
+	  z-index: 10;
+	}
 
-    #nameInput input {
-      font-size: 24px;
-      padding: 10px;
-      width: 220px;
-      border-radius: 8px;
-      border: none;
-    }
+	#nameInput input {
+	  font-size: 24px;
+	  padding: 10px;
+	  width: 220px;
+	  border-radius: 8px;
+	  border: none;
+	}
 
-    #nameInput button {
-      margin-top: 10px;
-      font-size: 20px;
-    }
+	#nameInput button {
+	  margin-top: 10px;
+	  font-size: 20px;
+	}
 
-    #gameTitle {
-      font-family: 'Monoton', cursive;
-      font-size: 72px;
-      font-weight: bold;
-      color: white;
-      margin-bottom: 30px;
-      letter-spacing: 4px;
-      text-shadow: 3px 3px 10px #ffffff40;
-    }
+	#gameTitle {
+	  font-family: 'Monoton', cursive;
+	  font-size: 72px;
+	  font-weight: bold;
+	  color: white;
+	  margin-bottom: 30px;
+	  letter-spacing: 4px;
+	  text-shadow: 3px 3px 10px #ffffff40;
+	}
 
-    /* === MOBILE ORIZZONTALE === */
-    @media only screen and (max-width: 768px) {
-      body {
-        transform: rotate(90deg);
-        transform-origin: left top;
-        width: 100vh;
-        height: 100vw;
-        overflow-x: hidden;
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
+	/* === MOBILE LANDSCAPE ONLY === */
+	@media only screen and (max-width: 768px) and (orientation: landscape) {
+	  canvas {
+		width: 100vw;
+		height: 100vh;
+		border: none;
+		margin: 0;
+		position: absolute;
+		top: 0;
+		left: 0;
+	  }
 
-      canvas {
-        width: 100vh;
-        height: 100vw;
-        border: none;
-      }
+	  #ui {
+		display: flex !important;
+		flex-direction: row;
+		justify-content: space-between;
+		position: absolute;
+		bottom: 20px;
+		width: 100%;
+		padding: 0 20px;
+		z-index: 20;
+	  }
 
-      #ui {
-        flex-direction: row;
-        gap: 10px;
-      }
+	  #ui button {
+		width: 70px;
+		height: 70px;
+		font-size: 28px;
+	  }
 
-      #ui button {
-        width: 70px;
-        height: 70px;
-        font-size: 24px;
-      }
-
-      #nameInput, #respawnBtn {
-        transform: translate(-50%, -50%) scale(1.3);
-      }
-    }
+	  #nameInput, #respawnBtn {
+		transform: translate(-50%, -50%) scale(1.3);
+	  }
+	}
   </style>
 </head>
 <body>
@@ -189,14 +186,29 @@ window.addEventListener('orientationchange', () => {
   }
 });
 
-// Rende canvas pieno su mobile all’avvio
 window.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById("game");
+
   if (isMobile()) {
-    const canvas = document.getElementById("game");
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+
+    // Forza il ridisegno se serve
+    if (typeof draw === "function") {
+      requestAnimationFrame(draw);
+    }
+
+    // Sistema stile e centratura
+    canvas.style.margin = "0";
+    canvas.style.border = "none";
+    canvas.style.background = "#222";
+    canvas.style.display = "block";
+    canvas.style.position = "absolute";
+    canvas.style.top = "0";
+    canvas.style.left = "0";
   }
 });
+
 
 // Al click su "startBtn", attiva fullscreen e orientamento su mobile
 document.addEventListener('DOMContentLoaded', () => {
