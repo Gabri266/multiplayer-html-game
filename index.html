@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="it">
+<!DOCTYPE html> 
+<html>
 <head>
   <meta charset="utf-8" />
   <title>Multiplayer Game</title>
@@ -7,100 +7,183 @@
   <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
   <style>
     html, body {
-      margin:0; padding:0;
-      background:#000; color:#fff;
-      height:100vh; overflow:hidden;
-      display:flex; align-items:center; justify-content:center;
-      font-family:sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      touch-action: none;
+      overflow: hidden;
+      height: 100%;
     }
-    /* Contenitore centrale (ruotabile su mobile) */
-    #container {
-      position:relative;
-      width:600px; height:400px;
-      transition:width .3s, height .3s, transform .3s;
-    }
+
     canvas {
-      width:100%; height:100%;
-      background:#222; border:2px solid #fff;
-      display:block;
+      display: block;
+      background: #222;
+      border: 2px solid #fff;
+      margin: 0 auto;
     }
+
     #ui {
-      margin-top:10px;
-      display:flex; justify-content:center; gap:10px;
+      display: none;
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      justify-content: space-between;
+      padding: 0 30px;
+      z-index: 10;
     }
-    #ui button {
-      padding:15px 20px; font-size:18px;
-      background:#444; color:#fff; border:none; border-radius:8px;
-      min-width:60px; min-height:60px;
-      cursor:pointer;
+
+    button {
+      padding: 15px 20px;
+      font-size: 18px;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      user-select: none;
     }
-    #respawnBtn, #nameInput {
-      position:absolute; left:50%; transform:translateX(-50%); z-index:10;
-    }
+
     #respawnBtn {
-      top:50%; transform:translate(-50%,-50%);
-      background:red; font-size:24px; padding:15px 30px; border-radius:10px;
-      display:none;
+      display: none;
+      position: absolute;
+      top: 55%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: red;
+      font-size: 24px;
+      padding: 15px 30px;
+      border-radius: 10px;
+      z-index: 10;
     }
+
     #nameInput {
-      top:30%; text-align:center;
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
     }
+
     #nameInput input {
-      font-size:24px; padding:10px; width:220px; border:none; border-radius:8px;
+      font-size: 24px;
+      padding: 10px;
+      width: 220px;
+      border-radius: 8px;
+      border: none;
     }
+
     #nameInput button {
-      margin-top:10px; font-size:20px;
+      margin-top: 10px;
+      font-size: 20px;
     }
+
     #gameTitle {
-      font-family:'Monoton',cursive; font-size:72px;
-      margin-bottom:30px; text-shadow:3px 3px 10px #ffffff40;
+      font-family: 'Monoton', cursive;
+      font-size: 72px;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 30px;
+      letter-spacing: 4px;
+      text-shadow: 3px 3px 10px #ffffff40;
     }
-    @media (max-width:768px) {
-      #container {
-        width:90vh; height:90vw;
-        transform:rotate(90deg);
-        transform-origin:center center;
+
+    /* === MOBILE ORIZZONTALE === */
+    @media only screen and (max-width: 768px) {
+      body {
+        transform: rotate(90deg);
+        transform-origin: left top;
+        width: 100vh;
+        height: 100vw;
+        overflow-x: hidden;
+        position: absolute;
+        top: 0;
+        left: 0;
       }
+	@media only screen and (max-width: 768px) and (orientation: landscape) {
+	  #ui {
+		display: flex !important;
+		flex-direction: row;
+		justify-content: space-around;
+		position: absolute;
+		bottom: 20px;
+		width: 100%;
+		z-index: 20;
+	  }
+
+	  #ui button {
+		width: 70px;
+		height: 70px;
+		font-size: 28px;
+	  }
+
+	  #nameInput, #respawnBtn {
+		transform: translate(-50%, -50%) scale(1.3);
+	  }
+	}
+
+      canvas {
+        width: 100vh;
+        height: 100vw;
+        border: none;
+      }
+
+      #ui {
+        flex-direction: row;
+        gap: 10px;
+      }
+
       #ui button {
-        font-size:24px; width:70px; height:70px;
+        width: 70px;
+        height: 70px;
+        font-size: 24px;
+      }
+
+      #nameInput, #respawnBtn {
+        transform: translate(-50%, -50%) scale(1.3);
       }
     }
   </style>
 </head>
 <body>
 
-  <!-- preload audio -->
-  <audio id="sfx-shoot" src="https://cdn.pixabay.com/audio/2024/08/19/audio_8313075fdb.mp3"></audio>
-  <audio id="sfx-hit"   src="https://cdn.pixabay.com/audio/2025/07/03/audio_2538f74382.mp3"></audio>
-  <audio id="sfx-up"    src="https://cdn.pixabay.com/audio/2023/09/20/audio_78f082c2dc.mp3"></audio>
-  <audio id="sfx-down"  src="https://cdn.pixabay.com/audio/2022/03/04/audio_d47090aeab.mp3"></audio>
-  <audio id="sfx-win"   src="https://cdn.pixabay.com/audio/2023/04/13/audio_f4865f179c.mp3"></audio>
-  <audio id="bg-music"  src="https://cdn.pixabay.com/audio/2023/01/30/audio_5d1911c47a.mp3" loop></audio>
+<!-- AUDIO -->
+<audio id="sfx-shoot" src="https://cdn.pixabay.com/audio/2024/08/19/audio_8313075fdb.mp3"></audio>
+<audio id="sfx-hit" src="https://cdn.pixabay.com/audio/2025/07/03/audio_2538f74382.mp3"></audio>
+<audio id="sfx-up" src="https://cdn.pixabay.com/audio/2023/09/20/audio_78f082c2dc.mp3"></audio>
+<audio id="sfx-down" src="https://cdn.pixabay.com/audio/2022/03/04/audio_d47090aeab.mp3"></audio>
+<audio id="sfx-win" src="https://cdn.pixabay.com/audio/2023/04/13/audio_f4865f179c.mp3"></audio>
+<audio id="bg-music" src="https://cdn.pixabay.com/audio/2023/01/30/audio_5d1911c47a.mp3" loop></audio>
 
-  <!-- overlay inserimento nome -->
-  <div id="nameInput">
-    <h1 id="gameTitle">MULTY</h1>
-    <input id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off"/>
-    <br/>
-    <button id="startBtn">Entra nel gioco</button>
-  </div>
+<!-- NOME -->
+<div id="nameInput">
+  <h1 id="gameTitle">MULTY</h1>
+  <input id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off" />
+  <br/>
+  <button id="startBtn">Entra nel gioco</button>
+</div>
 
-  <!-- contenitore canvas + UI -->
-  <div id="container">
-    <canvas id="game" width="600" height="400"></canvas>
-    <div id="ui">
-      <button data-key="ArrowLeft">◀</button>
-      <button data-key="ArrowUp">▲</button>
-      <button data-key="ArrowDown">▼</button>
-      <button data-key="ArrowRight">▶</button>
-    </div>
-    <button id="respawnBtn">RESPAWNA</button>
-  </div>
+<!-- CANVAS -->
+<canvas id="game" width="600" height="400"></canvas>
 
-  <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
-  <script>
+<!-- TASTI UI -->
+<div id="ui">
+  <button data-key="ArrowLeft">◀</button>
+  <button data-key="ArrowUp">▲</button>
+  <button data-key="ArrowDown">▼</button>
+  <button data-key="ArrowRight">▶</button>
+</div>
+
+<!-- RESPAWN -->
+<button id="respawnBtn">RESPAWNA</button>
+
+<script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
+<script>
 
 
+// === Aggiunta per supporto mobile ===
 function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
@@ -127,21 +210,31 @@ window.addEventListener('orientationchange', () => {
   }
 });
 
-// Opzionale: adattiamo container a schermo senza deformare
-function resizeContainer() {
-  const container = document.getElementById("container");
-  if(window.innerWidth <= 768) {
-    // usiamo 90% della viewport height e width invertite perché ruotiamo
-    container.style.width = (window.innerHeight * 0.9) + "px";
-    container.style.height = (window.innerWidth * 0.9) + "px";
-  } else {
-    container.style.width = "600px";
-    container.style.height = "400px";
-  }
-}
-window.addEventListener("resize", resizeContainer);
-window.addEventListener("load", resizeContainer);
+window.addEventListener('DOMContentLoaded', () => {
+  const canvas = document.getElementById("game");
 
+  if (isMobile()) {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Forza il ridisegno se serve
+    if (typeof draw === "function") {
+      requestAnimationFrame(draw);
+    }
+
+    // Sistema stile e centratura
+    canvas.style.margin = "0";
+    canvas.style.border = "none";
+    canvas.style.background = "#222";
+    canvas.style.display = "block";
+    canvas.style.position = "absolute";
+    canvas.style.top = "0";
+    canvas.style.left = "0";
+  }
+});
+
+
+// Al click su "startBtn", attiva fullscreen e orientamento su mobile
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
   startBtn.addEventListener('click', () => {
@@ -151,8 +244,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
-
-
 
 const pubnub = new PubNub({
   publishKey:   'pub-c-74478a98-2fd3-42ed-bd22-d5e81ee7012a',
@@ -206,57 +297,53 @@ function startGame() {
   const name = document.getElementById("playerName").value.trim();
   if (!name) return alert("Inserisci un nome!");
 
-  // Ferma solo per questo client la musica di lobby
-  const bg = document.getElementById('bg-music');
-  if (bg && !bg.paused) {
-    bg.pause();
-    bg.currentTime = 0;
-  }
-
-  // Fullscreen + orientamento su mobile
-  if (isMobile()) {
-    goFullScreen();
-    lockOrientation();
-  }
-
-  // Inizializza il giocatore
   players[myID] = {
     name,
-    x: Math.random() * 580,
-    y: Math.random() * 380,
-    color: '#' + Math.floor(Math.random()*16777215).toString(16),
+    x: Math.random()*580,
+    y: Math.random()*380,
+    color: '#'+Math.floor(Math.random()*16777215).toString(16),
     kills: 0,
     lives: 3
   };
 
-  // Nascondi overlay nome
   document.getElementById("nameInput").style.display = 'none';
   isDead = false;
   processedKill = {};
-  winPlayed = false;
 
-  // Sincronizza avvio: se nessun messaggio “startGame”, lo pubblichi tu
+  // Suona musica iniziale SOLO per il giocatore che entra nella lobby
+
+
+  // Controlla se la partita è già partita, se no la avvia
   pubnub.history({ channel, count: 100 }, (status, res) => {
-    const started = res.messages.find(m => m.entry.type === "startGame");
-    if (!started) {
+    const startedMsg = res.messages.find(m => m.entry.type === "startGame");
+	const bgMusic = document.getElementById('bg-music');
+	if(bgMusic && !bgMusic.paused){
+		bgMusic.pause();
+		bgMusic.currentTime = 0;
+	}
+    if (!startedMsg) {
+      // Primo giocatore: avvia il gioco e manda timestamp a tutti
+      pubnub.publish({ channel, message: { type: "startGame", timestamp: Date.now() } });
+      // Imposta localmente
       gameStartedAt = Date.now();
-      pubnub.publish({
-        channel,
-        message: { type: "startGame", timestamp: gameStartedAt }
-      });
+      gameEnded = false;
+      endPhase = 0;
+      bullets = [];
+      spawnPowerups();
+      sendState();
+      sendBullets();
+      requestAnimationFrame(draw);
     } else {
-      gameStartedAt = started.entry.timestamp;
+      // Giocatore che arriva dopo: si sincronizza col tempo di inizio
+      gameStartedAt = startedMsg.entry.timestamp;
+      gameEnded = false;
+      endPhase = 0;
+      bullets = [];
+      spawnPowerups();
+      sendState();
+      sendBullets();
+      requestAnimationFrame(draw);
     }
-
-    gameEnded = false;
-    endPhase = 0;
-    bullets = [];
-
-    spawnPowerups();
-    sendState();
-    sendBullets();
-
-    requestAnimationFrame(draw);
   });
 }
 startBtn.addEventListener('click', startGame);
