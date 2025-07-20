@@ -15,6 +15,10 @@
 	  touch-action: none;
 	  overflow: hidden;
 	  height: 100%;
+	  display: flex;
+	  flex-direction: column;
+	  justify-content: center;
+	  align-items: center;
 	}
 
 	canvas {
@@ -22,6 +26,9 @@
 	  margin: 20px auto 0;
 	  background: #222;
 	  border: 2px solid #fff;
+	  width: 600px;
+	  height: 400px;
+	  transition: width 0.3s ease, height 0.3s ease;
 	}
 
 	#ui {
@@ -88,37 +95,44 @@
 	  text-shadow: 3px 3px 10px #ffffff40;
 	}
 
-	/* === MOBILE LANDSCAPE ONLY === */
-	@media only screen and (max-width: 768px) and (orientation: landscape) {
-	  canvas {
-		width: 80vw;
-		height: 60vh;
-		border: none;
+	/* === MOBILE ROTATION & SCALING === */
+	@media only screen and (max-width: 768px) {
+	  body {
+		/* Center column layout */
+		height: 100vh;
+		padding: 0;
 		margin: 0;
-		position: absolute;
-		top: 0;
-		left: 0;
+	  }
+
+	  canvas {
+		background: #222;
+		border: 2px solid #fff;
+		/* Ruota canvas di 90 gradi */
+		transform: rotate(90deg);
+		transform-origin: center center;
+		/* larghezza e altezza gestite da JS */
+		max-width: 90vh;
+		max-height: 90vw;
+		margin: 0 auto;
 	  }
 
 	  #ui {
 		display: flex !important;
-		flex-direction: row;
-		justify-content: space-between;
-		position: absolute;
-		bottom: 20px;
-		width: 100%;
-		padding: 0 20px;
-		z-index: 20;
+		justify-content: center;
+		gap: 15px;
+		margin-bottom: 15px;
+		user-select: none;
+		-webkit-user-select: none;
+		/* Posiziona i tasti sopra il canvas */
+		order: -1;
+		/* Ruota i tasti per farli apparire dritti */
+		transform: rotate(90deg);
 	  }
 
 	  #ui button {
-		width: 70px;
-		height: 70px;
-		font-size: 28px;
-	  }
-
-	  #nameInput, #respawnBtn {
-		transform: translate(-50%, -50%) scale(1.3);
+		width: 60px;
+		height: 60px;
+		font-size: 22px;
 	  }
 	}
   </style>
@@ -158,7 +172,6 @@
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
 
-
 // === Aggiunta per supporto mobile ===
 function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -186,29 +199,39 @@ window.addEventListener('orientationchange', () => {
   }
 });
 
-window.addEventListener('DOMContentLoaded', () => {
+// Ridimensiona canvas su mobile per mantenere proporzioni e adattarsi allo schermo
+function resizeCanvasMobile() {
   const canvas = document.getElementById("game");
+  if(window.innerWidth <= 768){
+    // dimensioni originali
+    const originalWidth = 600;
+    const originalHeight = 400;
 
-  if (isMobile()) {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // max dimensioni disponibili (dopo rotazione)
+    const maxWidth = window.innerHeight * 0.9; // lato lungo canvas (altezza viewport)
+    const maxHeight = window.innerWidth * 0.9; // lato corto canvas (larghezza viewport)
 
-    // Forza il ridisegno se serve
-    if (typeof draw === "function") {
-      requestAnimationFrame(draw);
+    // calcola scala mantenendo proporzioni (ruotato di 90°, quindi larghezza canvas = originalHeight)
+    let scaledWidth = maxWidth;
+    let scaledHeight = scaledWidth * (originalHeight / originalWidth); // 400/600 = 0.666...
+
+    if(scaledHeight > maxHeight){
+      scaledHeight = maxHeight;
+      scaledWidth = scaledHeight * (originalWidth / originalHeight); // 600/400 = 1.5
     }
 
-    // Sistema stile e centratura
-    canvas.style.margin = "0";
-    canvas.style.border = "none";
-    canvas.style.background = "#222";
-    canvas.style.display = "block";
-    canvas.style.position = "absolute";
-    canvas.style.top = "0";
-    canvas.style.left = "0";
+    // Applica dimensioni al canvas: attenzione, dopo rotazione width = scaledHeight e height = scaledWidth
+    canvas.style.width = `${scaledHeight}px`;
+    canvas.style.height = `${scaledWidth}px`;
+  } else {
+    // Reset desktop
+    canvas.style.width = "600px";
+    canvas.style.height = "400px";
   }
-});
+}
 
+window.addEventListener("load", resizeCanvasMobile);
+window.addEventListener("resize", resizeCanvasMobile);
 
 // Al click su "startBtn", attiva fullscreen e orientamento su mobile
 document.addEventListener('DOMContentLoaded', () => {
