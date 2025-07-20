@@ -6,135 +6,133 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
   <style>
-	html, body {
-	  margin: 0;
-	  padding: 0;
-	  background: #000;
-	  color: #fff;
-	  font-family: sans-serif;
-	  touch-action: none;
-	  overflow: hidden;
-	  height: 100%;
-	  display: flex;
-	  flex-direction: column;
-	  justify-content: center;
-	  align-items: center;
-	}
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: sans-serif;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
 
-	canvas {
-	  display: block;
-	  margin: 20px auto 0;
-	  background: #222;
-	  border: 2px solid #fff;
-	  width: 600px;
-	  height: 400px;
-	  transition: width 0.3s ease, height 0.3s ease;
-	}
+    /* Contenitore esterno che ruoteremo su mobile */
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      /* dimensioni fisse, da modificare in JS su mobile */
+      width: 600px;
+      height: 400px;
+      transition: width 0.3s, height 0.3s;
+      position: relative;
+    }
 
-	#ui {
-	  display: flex;
-	  justify-content: center;
-	  gap: 10px;
-	  margin-top: 10px;
-	  user-select: none;
-	  -webkit-user-select: none;
-	}
+    canvas {
+      background: #222;
+      border: 2px solid #fff;
+      display: block;
+      width: 600px;
+      height: 400px;
+    }
 
-	button {
-	  padding: 15px 20px;
-	  font-size: 18px;
-	  background: #444;
-	  color: #fff;
-	  border: none;
-	  border-radius: 8px;
-	  cursor: pointer;
-	}
+    #ui {
+      margin-top: 10px;
+      display: flex;
+      gap: 10px;
+      user-select: none;
+      -webkit-user-select: none;
+      justify-content: center;
+    }
 
-	#respawnBtn {
-	  display: none;
-	  position: absolute;
-	  top: 55%;
-	  left: 50%;
-	  transform: translate(-50%, -50%);
-	  background: red;
-	  font-size: 24px;
-	  padding: 15px 30px;
-	  border-radius: 10px;
-	  z-index: 10;
-	}
+    #ui button {
+      padding: 15px 20px;
+      font-size: 18px;
+      background: #444;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      min-width: 60px;
+      min-height: 60px;
+    }
 
-	#nameInput {
-	  position: absolute;
-	  top: 30%;
-	  left: 50%;
-	  transform: translate(-50%, -50%);
-	  text-align: center;
-	  z-index: 10;
-	}
+    #respawnBtn {
+      display: none;
+      position: absolute;
+      top: 55%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: red;
+      font-size: 24px;
+      padding: 15px 30px;
+      border-radius: 10px;
+      z-index: 10;
+    }
 
-	#nameInput input {
-	  font-size: 24px;
-	  padding: 10px;
-	  width: 220px;
-	  border-radius: 8px;
-	  border: none;
-	}
+    #nameInput {
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
+    }
 
-	#nameInput button {
-	  margin-top: 10px;
-	  font-size: 20px;
-	}
+    #nameInput input {
+      font-size: 24px;
+      padding: 10px;
+      width: 220px;
+      border-radius: 8px;
+      border: none;
+    }
 
-	#gameTitle {
-	  font-family: 'Monoton', cursive;
-	  font-size: 72px;
-	  font-weight: bold;
-	  color: white;
-	  margin-bottom: 30px;
-	  letter-spacing: 4px;
-	  text-shadow: 3px 3px 10px #ffffff40;
-	}
+    #nameInput button {
+      margin-top: 10px;
+      font-size: 20px;
+    }
 
-	/* === MOBILE ROTATION & SCALING === */
-	@media only screen and (max-width: 768px) {
-	  body {
-		/* Center column layout */
-		height: 100vh;
-		padding: 0;
-		margin: 0;
-	  }
+    #gameTitle {
+      font-family: 'Monoton', cursive;
+      font-size: 72px;
+      font-weight: bold;
+      color: white;
+      margin-bottom: 30px;
+      letter-spacing: 4px;
+      text-shadow: 3px 3px 10px #ffffff40;
+    }
 
-	  canvas {
-		background: #222;
-		border: 2px solid #fff;
-		/* Ruota canvas di 90 gradi */
-		transform: rotate(90deg);
-		transform-origin: center center;
-		/* larghezza e altezza gestite da JS */
-		max-width: 90vh;
-		max-height: 90vw;
-		margin: 0 auto;
-	  }
+    /* --- MOBILE --- */
+    @media (max-width: 768px) {
+      html, body {
+        height: 100vh;
+        overflow: hidden;
+      }
 
-	  #ui {
-		display: flex !important;
-		justify-content: center;
-		gap: 15px;
-		margin-bottom: 15px;
-		user-select: none;
-		-webkit-user-select: none;
-		/* Posiziona i tasti sopra il canvas */
-		order: -1;
-		/* Ruota i tasti per farli apparire dritti */
-		transform: rotate(90deg);
-	  }
+      #container {
+        /* invertiamo larghezza e altezza perchè ruotiamo il contenitore */
+        width: 90vh;   /* usiamo altezza viewport come larghezza container */
+        height: 90vw;  /* larghezza viewport come altezza container */
+        transform: rotate(90deg);
+        transform-origin: center center;
+      }
 
-	  #ui button {
-		width: 60px;
-		height: 60px;
-		font-size: 22px;
-	  }
-	}
+      canvas {
+        width: 100%;
+        height: 100%;
+        border-width: 3px;
+      }
+
+      #ui {
+        margin-top: 10px;
+        /* Lasciamo i bottoni sotto il canvas */
+        /* Se vuoi, si può mettere verticale o lato */
+      }
+    }
   </style>
 </head>
 <body>
@@ -155,15 +153,15 @@
   <button id="startBtn">Entra nel gioco</button>
 </div>
 
-<!-- CANVAS -->
-<canvas id="game" width="600" height="400"></canvas>
-
-<!-- TASTI UI -->
-<div id="ui">
-  <button data-key="ArrowLeft">◀</button>
-  <button data-key="ArrowUp">▲</button>
-  <button data-key="ArrowDown">▼</button>
-  <button data-key="ArrowRight">▶</button>
+<!-- CONTENITORE -->
+<div id="container">
+  <canvas id="game" width="600" height="400"></canvas>
+  <div id="ui">
+    <button data-key="ArrowLeft">◀</button>
+    <button data-key="ArrowUp">▲</button>
+    <button data-key="ArrowDown">▼</button>
+    <button data-key="ArrowRight">▶</button>
+  </div>
 </div>
 
 <!-- RESPAWN -->
@@ -172,7 +170,6 @@
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
 
-// === Aggiunta per supporto mobile ===
 function isMobile() {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
@@ -199,41 +196,21 @@ window.addEventListener('orientationchange', () => {
   }
 });
 
-// Ridimensiona canvas su mobile per mantenere proporzioni e adattarsi allo schermo
-function resizeCanvasMobile() {
-  const canvas = document.getElementById("game");
-  if(window.innerWidth <= 768){
-    // dimensioni originali
-    const originalWidth = 600;
-    const originalHeight = 400;
-
-    // max dimensioni disponibili (dopo rotazione)
-    const maxWidth = window.innerHeight * 0.9; // lato lungo canvas (altezza viewport)
-    const maxHeight = window.innerWidth * 0.9; // lato corto canvas (larghezza viewport)
-
-    // calcola scala mantenendo proporzioni (ruotato di 90°, quindi larghezza canvas = originalHeight)
-    let scaledWidth = maxWidth;
-    let scaledHeight = scaledWidth * (originalHeight / originalWidth); // 400/600 = 0.666...
-
-    if(scaledHeight > maxHeight){
-      scaledHeight = maxHeight;
-      scaledWidth = scaledHeight * (originalWidth / originalHeight); // 600/400 = 1.5
-    }
-
-    // Applica dimensioni al canvas: attenzione, dopo rotazione width = scaledHeight e height = scaledWidth
-    canvas.style.width = `${scaledHeight}px`;
-    canvas.style.height = `${scaledWidth}px`;
+// Opzionale: adattiamo container a schermo senza deformare
+function resizeContainer() {
+  const container = document.getElementById("container");
+  if(window.innerWidth <= 768) {
+    // usiamo 90% della viewport height e width invertite perché ruotiamo
+    container.style.width = (window.innerHeight * 0.9) + "px";
+    container.style.height = (window.innerWidth * 0.9) + "px";
   } else {
-    // Reset desktop
-    canvas.style.width = "600px";
-    canvas.style.height = "400px";
+    container.style.width = "600px";
+    container.style.height = "400px";
   }
 }
+window.addEventListener("resize", resizeContainer);
+window.addEventListener("load", resizeContainer);
 
-window.addEventListener("load", resizeCanvasMobile);
-window.addEventListener("resize", resizeCanvasMobile);
-
-// Al click su "startBtn", attiva fullscreen e orientamento su mobile
 document.addEventListener('DOMContentLoaded', () => {
   const startBtn = document.getElementById('startBtn');
   startBtn.addEventListener('click', () => {
@@ -243,6 +220,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+
 
 const pubnub = new PubNub({
   publishKey:   'pub-c-74478a98-2fd3-42ed-bd22-d5e81ee7012a',
