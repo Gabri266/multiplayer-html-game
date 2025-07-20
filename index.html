@@ -20,21 +20,28 @@
       background: #222;
       border: 2px solid #fff;
     }
-    #ui {
-      position: absolute;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px;
-      user-select: none;
-      -webkit-user-select: none;
-      z-index: 10;
-      background: rgba(0, 0, 0, 0.5); /* opzionale per contrasto */
-      border-top: 1px solid #444;     /* opzionale per separazione */
-    }
+	#ui {
+	  position: absolute;
+	  bottom: 0;
+	  left: 50%;
+	  transform: translateX(-50%);
+	  display: flex;
+	  justify-content: space-between;
+	  align-items: center;
+	  gap: 500px; /* Spazio tra i due blocchi */
+	  padding: 10px 20px;
+	  user-select: none;
+	  z-index: 10;
+	  background: rgba(0, 0, 0, 0.5);
+	  border-top: 0px solid #444;
+	}
+
+	.btn-group {
+	  display: flex;
+	  flex-direction: row;
+	  gap: 10px;
+	}
+
     button {
       padding: 15px 20px;
       font-size: 18px;
@@ -108,11 +115,16 @@
   <canvas id="game" width="700" height="300"></canvas>
 
   <div id="ui">
-    <button data-key="ArrowLeft">◀</button>
-    <button data-key="ArrowUp">▲</button>
-    <button data-key="ArrowDown">▼</button>
-    <button data-key="ArrowRight">▶</button>
+    <div class="btn-group left">
+      <button data-key="ArrowLeft">◀</button>
+      <button data-key="ArrowUp">▲</button>
+    </div>
+    <div class="btn-group right">
+      <button data-key="ArrowDown">▼</button>
+      <button data-key="ArrowRight">▶</button>
+    </div>
   </div>
+
 
   <button id="respawnBtn">RESPAWNA</button>
 
@@ -120,6 +132,11 @@
   
 
 <script>
+
+
+
+
+
 const pubnub = new PubNub({
   publishKey:   'pub-c-74478a98-2fd3-42ed-bd22-d5e81ee7012a',
   subscribeKey: 'sub-c-64f0d3a0-9908-489d-9c1b-272cc30028bf',
@@ -167,6 +184,9 @@ function spawnPowerups() {
   powerups.push({ id: 'bad-1',  type: 'bad',  x: Math.random()*580, y: Math.random()*380 });
   pubnub.publish({ channel, message: { type: 'powerups', powerups } });
 }
+
+
+
 
 function startGame() {
   const name = document.getElementById("playerName").value.trim();
