@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <title>Multiplayer Game</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <link href="https://fonts.googleapis.com/css2?family=Monoton&display=swap" rel="stylesheet">
   <style>
-    body {
+    html, body {
       margin: 0;
       padding: 0;
       background: #000;
@@ -14,21 +14,26 @@
       font-family: sans-serif;
       touch-action: none;
       overflow: hidden;
+      height: 100%;
     }
+
     canvas {
       display: block;
-      margin: 20px auto 0;
       background: #222;
       border: 2px solid #fff;
+      margin: 0 auto;
     }
+
     #ui {
-      display: flex;
-      justify-content: center;
-      gap: 10px;
-      margin-top: 10px;
-      user-select: none;
-      -webkit-user-select: none;
+      display: none;
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      justify-content: space-between;
+      padding: 0 30px;
+      z-index: 10;
     }
+
     button {
       padding: 15px 20px;
       font-size: 18px;
@@ -39,6 +44,7 @@
       cursor: pointer;
       user-select: none;
     }
+
     #respawnBtn {
       display: none;
       position: absolute;
@@ -51,6 +57,7 @@
       border-radius: 10px;
       z-index: 10;
     }
+
     #nameInput {
       position: absolute;
       top: 30%;
@@ -59,6 +66,7 @@
       text-align: center;
       z-index: 10;
     }
+
     #nameInput input {
       font-size: 24px;
       padding: 10px;
@@ -66,10 +74,12 @@
       border-radius: 8px;
       border: none;
     }
+
     #nameInput button {
       margin-top: 10px;
       font-size: 20px;
     }
+
     #gameTitle {
       font-family: 'Monoton', cursive;
       font-size: 72px;
@@ -80,53 +90,45 @@
       text-shadow: 3px 3px 10px #ffffff40;
     }
 
-    /* === MOBILE LANDSCAPE STYLE === */
-    @media (max-width: 768px) and (orientation: landscape) {
+    /* === MOBILE ORIZZONTALE === */
+    @media only screen and (max-width: 768px) {
+      body {
+        transform: rotate(90deg);
+        transform-origin: left top;
+        width: 100vh;
+        height: 100vw;
+        overflow-x: hidden;
+        position: absolute;
+        top: 0;
+        left: 0;
+      }
+
       canvas {
-        width: 100vw !important;
-        height: 100vh !important;
+        width: 100vh;
+        height: 100vw;
         border: none;
-        margin: 0;
       }
 
       #ui {
-        position: fixed;
-        bottom: 20px;
-        width: 100vw;
-        height: auto;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 30px;
-        gap: 0;
-        z-index: 5;
+        flex-direction: row;
+        gap: 10px;
       }
 
       #ui button {
-        width: 80px;
-        height: 80px;
+        width: 70px;
+        height: 70px;
         font-size: 24px;
-        margin: 0;
-      }
-
-      #ui button:nth-child(1),
-      #ui button:nth-child(4) {
-        align-self: flex-end;
-      }
-
-      #ui button:nth-child(2),
-      #ui button:nth-child(3) {
-        align-self: flex-start;
       }
 
       #nameInput, #respawnBtn {
-        transform: translate(-50%, -50%) scale(1.2);
+        transform: translate(-50%, -50%) scale(1.3);
       }
     }
   </style>
 </head>
 <body>
 
-<!-- AUDIO PRECARICATI -->
+<!-- AUDIO -->
 <audio id="sfx-shoot" src="https://cdn.pixabay.com/audio/2024/08/19/audio_8313075fdb.mp3"></audio>
 <audio id="sfx-hit" src="https://cdn.pixabay.com/audio/2025/07/03/audio_2538f74382.mp3"></audio>
 <audio id="sfx-up" src="https://cdn.pixabay.com/audio/2023/09/20/audio_78f082c2dc.mp3"></audio>
@@ -134,7 +136,7 @@
 <audio id="sfx-win" src="https://cdn.pixabay.com/audio/2023/04/13/audio_f4865f179c.mp3"></audio>
 <audio id="bg-music" src="https://cdn.pixabay.com/audio/2023/01/30/audio_5d1911c47a.mp3" loop></audio>
 
-<!-- SEZIONE NOME -->
+<!-- NOME -->
 <div id="nameInput">
   <h1 id="gameTitle">MULTY</h1>
   <input id="playerName" placeholder="Inserisci il tuo nome" autocomplete="off" />
@@ -142,8 +144,10 @@
   <button id="startBtn">Entra nel gioco</button>
 </div>
 
+<!-- CANVAS -->
 <canvas id="game" width="600" height="400"></canvas>
 
+<!-- TASTI UI -->
 <div id="ui">
   <button data-key="ArrowLeft">◀</button>
   <button data-key="ArrowUp">▲</button>
@@ -151,10 +155,12 @@
   <button data-key="ArrowRight">▶</button>
 </div>
 
+<!-- RESPAWN -->
 <button id="respawnBtn">RESPAWNA</button>
 
 <script src="https://cdn.pubnub.com/sdk/javascript/pubnub.4.37.0.min.js"></script>
 <script>
+
 
 // === Aggiunta per supporto mobile ===
 function isMobile() {
